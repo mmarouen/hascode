@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.core.fromnumeric import prod
 from ortools.sat.python import cp_model
 from tabulate import tabulate
 
@@ -49,37 +50,36 @@ for j in range(n_jobs):
 for d in range(n_days):
     for m in range(n_machines):
         model.Add(sum(x[j][t][d][m] for t in range(n_tasks) for j in range(n_jobs)) <= 1)
-"""
-# constraint C2
+
+# constraint C2 / C3 (tasks precedence)
 for t in range(1, n_tasks):
     for j in range(n_jobs):
-        duration_tj = durations[j, t]
+        duration_tj = durations[j, t - 1]
         m_j = np.argmax(machines[j, t, :])
         m_j_1 = np.argmax(machines[j, t - 1, :])
         for d in range(n_days):
-            model.Add(x[j][t][d][m_j] == 0).OnlyEnforceIf(model.AddBoolAnd([x[j][t - 1][i][m_j_1].Not() for i in range(d - 1)]))
-"""
+            if (d <= duration_tj):
+                model.Add(x[j][t][d][m_j] == 0)
+            else:
+                #model.Add(x[j][t][d][m_j] == 0).OnlyEnforceIf([x[j][t - 1][i][m_j_1].Not() for i in range(d + 1)])
+                b = model.NewBoolVar('b')
+                model.Add(sum(x[j][t - 1][i][m_j_1] for i in range(d)) < duration_tj).OnlyEnforceIf(b)
+                model.Add(sum(x[j][t - 1][i][m_j_1] for i in range(d)) >= duration_tj).OnlyEnforceIf(b.Not())
+                model.Add(x[j][t][d][m_j] == 0).OnlyEnforceIf(b)
 
-"""
-# constraint C1
-for j in range(n_jobs):
-    for t in range(n_tasks):
-            model.Add(sum(x[j][t][d][m] for d in range(n_days) for m in range(n_machines)) == durations[j, t])
-"""
-
-
-# constraint C1
+# constraint C1 (consecutive days)
 for t in range(n_tasks):
     for j in range(n_jobs):
         duration_tj = durations[j, t]
         products = []
+        bools = []
         m_jt = np.argmax(machines[j, t, :])
         for d in range(n_days - duration_tj):
-            tomultiply = [x[j][t][i][m_jt] for i in range(d, d + duration_tj)]
-            multiply_var = model.NewIntVar('multiply_var')
-            #model.AddMultiplicationEquality(multiply_var, tomultiply)
-            products.append(tomultiply)
-        #model.AddBoolOr(products)
+            bools.append(model.NewBoolVar(f'bool_var_{d}'))
+            for i in range(d, d + duration_tj):
+                model.AddImplication(bools[d], x[j][t][i][m_jt])
+            products.append(bools[d])
+        model.AddBoolOr(products)
         model.Add(sum(x[j][t][d][m_jt] for d in range(n_days)) == duration_tj)
 
 # objective
@@ -92,6 +92,7 @@ solver = cp_model.CpSolver()
 status = solver.Solve(model)
 
 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
+    print("Solutions found!")
     print('day x machine table:')
     # Create per machine output lines.
     tab = np.zeros((n_machines, n_days), dtype=object)
@@ -103,7 +104,10 @@ if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
                     value = solver.Value(x[j][t][d][m])
                     if(value):
                         tab[m, d] = f'{j}-{t}'
-    table = tabulate(tab, range(n_days), tablefmt="fancy_grid", showindex=True)
+    table = tabulate(tab,
+                     [f'd_{d}' for d in range(n_days)],
+                     tablefmt="fancy_grid",
+                     showindex=[f'm_{m}' for m in range(n_machines)])
     print(table)
     # Finally print the solution found.
     print(f'Optimal Schedule Length: {solver.ObjectiveValue()}')
