@@ -61,7 +61,6 @@ for t in range(1, n_tasks):
             if (d <= duration_tj):
                 model.Add(x[j][t][d][m_j] == 0)
             else:
-                #model.Add(x[j][t][d][m_j] == 0).OnlyEnforceIf([x[j][t - 1][i][m_j_1].Not() for i in range(d + 1)])
                 b = model.NewBoolVar('b')
                 model.Add(sum(x[j][t - 1][i][m_j_1] for i in range(d)) < duration_tj).OnlyEnforceIf(b)
                 model.Add(sum(x[j][t - 1][i][m_j_1] for i in range(d)) >= duration_tj).OnlyEnforceIf(b.Not())
@@ -83,9 +82,18 @@ for t in range(n_tasks):
         model.Add(sum(x[j][t][d][m_jt] for d in range(n_days)) == duration_tj)
 
 # objective
-max_makespan = model.NewIntVar(1, n_days, 'max_makespan')
-model.AddMaxEquality(max_makespan, [d * x[j][t][d][m] for d in range(n_days) for t in range(n_tasks) for j in range(n_jobs) for m in range(n_machines)])
-model.Minimize(max_makespan + 1)
+max_makespan = model.NewIntVar(0, n_days, 'max_makespan')
+spans = {}
+spans_list = []
+for j in range(n_jobs):
+    for t in range(n_tasks):
+        m_jt = np.argmax(machines[j, t, :])
+        for d in range(n_days):
+            spans[j,t,d] = model.NewIntVar(0, n_days, f'spanvar_({j},{t},{d})')
+            model.Add(spans[j,t,d] == (d + 1) * x[j][t][d][m_jt])
+            spans_list.append(spans[j, t, d])
+model.AddMaxEquality(max_makespan, spans_list)
+model.Minimize(max_makespan)
 
 # Creates the solver and solve.
 solver = cp_model.CpSolver()
