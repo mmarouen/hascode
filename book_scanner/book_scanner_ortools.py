@@ -1,116 +1,146 @@
 import numpy as np
 from numpy.core.fromnumeric import prod
+from numpy.lib.function_base import append
 from ortools.sat.python import cp_model
 from tabulate import tabulate
 
 # inputs
-n_machines = 3
-jobs = [[(0, 3), (1, 2), (2, 2)],
-        [(0, 2), (2, 1), (1, 4)],
-        [(1, 4), (2, 3)]]
-n_jobs = len(jobs)
-n_tasks = max([len(tasks) for tasks in jobs])
-machines = np.zeros((n_jobs, n_tasks, n_machines), dtype=int)
-durations = np.zeros((n_jobs, n_tasks),dtype=int)
-for t in range(n_tasks):
-    for j in range(n_jobs):
-        if(j + 1 > len(jobs[j]) and t == 2):
-            continue
-        machines[j, t, jobs[j][t][0]] = 1
-        durations[j, t] = jobs[j][t][1]
-n_days = int(max(np.sum(durations, axis=1)) + 5)
+n_days = 7
+books = [1, 2, 3, 4, 5, 6]
+libraries = [ # foreach library: [t_l, n_l, list_of_books]
+    [2, 2, [0, 1, 2, 3, 4]],
+    [3, 1, [0, 2, 3, 5]]
+]
+n_books = len(books)
+n_libs = len(libraries)
 model = cp_model.CpModel()
 
 """
 create decision variables:
-x_j,t,d: whether task "t" from job "j" runs at day "d"
+- x_d,b,l: whether book "b" from library "l" gets scanned on day "d"
+- y_d,l: whether library "l" gets selected on day "d"
+- y_l: whether libeary "l" gets selected or not
 """
 x = []
-for j in range(n_jobs):
-    x_t = []
-    for t in range(n_tasks):
-        x_d = []
-        for d in range(n_days):
-            x_m = []
-            for m in range(n_machines):
-                x_m.append(model.NewBoolVar(f'x[{j}][{t}][{d}][{m}]'))
-            x_d.append(x_m)
-        x_t.append(x_d)
-    x.append(x_t)
-
-# constraint C3
-for j in range(n_jobs):
-    for t in range(n_tasks):
-        for m in range(n_machines):
-            if(machines[j, t, m] == 0):
-                for d in range(n_days):
-                    model.Add(x[j][t][d][m] == 0)
-
-# constraint C4
 for d in range(n_days):
-    for m in range(n_machines):
-        model.Add(sum(x[j][t][d][m] for t in range(n_tasks) for j in range(n_jobs)) <= 1)
+    x_d = []
+    for b in range(n_books):
+        x_b = []
+        for l in range(n_libs):
+            x_b.append(model.NewBoolVar(f'x[{d}][{b}][{l}]'))
+        x_d.append(x_b)
+    x.append(x_d)
 
-# constraint C2 / C3 (tasks precedence)
-for t in range(1, n_tasks):
-    for j in range(n_jobs):
-        duration_tj = durations[j, t - 1]
-        m_j = np.argmax(machines[j, t, :])
-        m_j_1 = np.argmax(machines[j, t - 1, :])
-        for d in range(n_days):
-            if (d <= duration_tj):
-                model.Add(x[j][t][d][m_j] == 0)
-            else:
-                #model.Add(x[j][t][d][m_j] == 0).OnlyEnforceIf([x[j][t - 1][i][m_j_1].Not() for i in range(d + 1)])
-                b = model.NewBoolVar('b')
-                model.Add(sum(x[j][t - 1][i][m_j_1] for i in range(d)) < duration_tj).OnlyEnforceIf(b)
-                model.Add(sum(x[j][t - 1][i][m_j_1] for i in range(d)) >= duration_tj).OnlyEnforceIf(b.Not())
-                model.Add(x[j][t][d][m_j] == 0).OnlyEnforceIf(b)
+y = []
+for d in range(n_days):
+    y_d = []
+    for l in range(n_libs):
+        y_d.append(model.NewBoolVar(f'y[{d}][{l}]'))
+    y.append(y_d)
 
-# constraint C1 (consecutive days)
-for t in range(n_tasks):
-    for j in range(n_jobs):
-        duration_tj = durations[j, t]
-        products = []
-        bools = []
-        m_jt = np.argmax(machines[j, t, :])
-        for d in range(n_days - duration_tj):
-            bools.append(model.NewBoolVar(f'bool_var_{d}'))
-            for i in range(d, d + duration_tj):
-                model.AddImplication(bools[d], x[j][t][i][m_jt])
-            products.append(bools[d])
-        model.AddBoolOr(products)
-        model.Add(sum(x[j][t][d][m_jt] for d in range(n_days)) == duration_tj)
+y_l = []
+for l in range(n_libs):
+    y_l.append(model.NewBoolVar(f'y_l[{l}]'))
+
+"""
+Derived useful functions:
+x_b: whether book "b" gets scanned 
+"""
+x_b = []
+for b in range(n_books):
+    x_b.append(model.NewBoolVar(f'x_b[{b}]'))
+    model.Add(sum(x[d][b][l] for l in range(n_libs) for d in range(n_days)) > 0).OnlyEnforceIf(x_b[b])
+    model.Add(sum(x[d][b][l] for l in range(n_libs) for d in range(n_days)) == 0).OnlyEnforceIf(x_b[b].Not())
+
+# Constraint C1
+for b in range(n_books):
+    for l in range(n_libs):
+        l_books = libraries[l][2]
+        if (b not in l_books):
+            for d in range(n_days):
+                model.Add(x[d][b][l] == 0)
+
+# Constraint C2
+for b in range(n_books):
+    # model.Add(x_b[b] <= 1)
+    model.Add(sum(x[d][b][l] for l in range(n_libs) for d in range(n_days)) <= 1)
+
+# Constraint C3
+for d in range(n_days):
+    model.Add(sum(y[d][l] for l in range(n_libs)) <= 1)
+
+# Constraint C4
+for l in range(n_libs):
+    t_l = libraries[l][0]
+    model.Add(sum(y[d][l] for d in range(n_days)) <= y_l[l] * t_l)
+
+# Constraint C5
+for d in range(n_days):
+    for l in range(n_libs):
+        n_l = libraries[l][1]
+        model.Add(sum(x[d][b][l] for b in range(n_books)) <= n_l * y_l[l])
+
+# Constrainz C6
+for l in range(n_libs):
+    n_l = libraries[l][1]
+    t_l = libraries[l][0]
+    argmax_d = model.NewIntVar(t_l - 1, n_days, 'argmax_d')
+    days_libs = []
+    for d in range(n_days):
+        days_libs.append(model.NewIntVar(0, n_days, f'days_libs[{d}]'))
+        model.Add(days_libs[d] == d * y[d][l])
+    model.AddMaxEquality(argmax_d, days_libs)
+    for d in range(t_l):
+        model.Add(sum(x[d][b][l] for b in range(n_books)) == 0)
+    for d in range(t_l, n_days):
+        bool_var = model.NewBoolVar('bool_var')
+        model.Add(argmax_d < d).OnlyEnforceIf(bool_var)
+        model.Add(argmax_d >= d).OnlyEnforceIf(bool_var.Not())
+        model.Add(sum(x[d][b][l] for b in range(n_books)) > 0).OnlyEnforceIf(bool_var)
+        model.Add(sum(x[d][b][l] for b in range(n_books)) == 0).OnlyEnforceIf(bool_var.Not())
+
+# Constraint C7: library integrated in consecutive days
+for l in range(n_libs):
+    integrated = []
+    t_l = libraries[l][0]
+    pos = 0
+    for d in range(t_l, n_days):
+        integrated.append(model.NewBoolVar(f'integrated_{pos}'))
+        for i in range(d - t_l, d):
+            model.AddImplication(integrated[pos], y[i][l])
+        pos += 1
+    model.Add(sum(integrated[pos] for pos in range(len(integrated))) == 1).OnlyEnforceIf(y_l[l])
+    model.Add(sum(integrated[pos] for pos in range(len(integrated))) == 0).OnlyEnforceIf(y_l[l].Not())
 
 # objective
-max_makespan = model.NewIntVar(1, n_days, 'max_makespan')
-model.AddMaxEquality(max_makespan, [d * x[j][t][d][m] for d in range(n_days) for t in range(n_tasks) for j in range(n_jobs) for m in range(n_machines)])
-model.Minimize(max_makespan + 1)
+total_score = model.NewIntVar(0, 200, 'total_score')
+model.Add(total_score == sum(books[b] * x_b[b] for b in range(n_books)))
+model.Maximize(total_score)
 
 # Creates the solver and solve.
 solver = cp_model.CpSolver()
 status = solver.Solve(model)
 
 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
-    print("Solutions found!")
-    print('day x machine table:')
-    # Create per machine output lines.
-    tab = np.zeros((n_machines, n_days), dtype=object)
-    for d in range(n_days):
-        for m in range(n_machines):
-            var_msg = ''
-            for j in range(n_jobs):
-                for t in range(n_tasks):
-                    value = solver.Value(x[j][t][d][m])
-                    if(value):
-                        tab[m, d] = f'{j}-{t}'
+    print(f'Solution found: total score {solver.Value(total_score)}')
+    print("Day x libraries tables")
+    tab = np.zeros((n_libs, n_days), dtype=object)
+    for l in range(n_libs):
+        if(not solver.Value(y_l[l])):
+            continue
+        for d in range(n_days):
+            txt = ''
+            if(solver.Value(y[d][l])):
+                txt = f'int l_{l}'
+            for b in range(n_books):
+                if(solver.Value(x[d][b][l])):
+                    txt += f'b_{b}'
+            tab[l, d] = txt
     table = tabulate(tab,
                      [f'd_{d}' for d in range(n_days)],
                      tablefmt="fancy_grid",
-                     showindex=[f'm_{m}' for m in range(n_machines)])
+                     showindex=[f'l_{l}' for l in range(n_libs)])
     print(table)
-    # Finally print the solution found.
-    print(f'Optimal Schedule Length: {solver.ObjectiveValue()}')
 else:
     print('No solution found.')
 
