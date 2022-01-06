@@ -1,6 +1,4 @@
 import numpy as np
-from numpy.core.fromnumeric import prod
-from numpy.lib.function_base import append
 from ortools.sat.python import cp_model
 from tabulate import tabulate
 
