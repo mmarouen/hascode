@@ -1,5 +1,5 @@
 # Hashcode repository
-This repository prents attempted solutions for some google hashcode challenges along with some standard optimization problems:
+This repository presents attempted solutions for some google hashcode challenges along with some standard optimization problems:
 - 2018 preparation round [the pizza problem](pizza/)
 - 2020 qualification round [book scanner challenge](book_scanner/)
 - 2020 preparation round [more pizza challenge](more_pizza/)
