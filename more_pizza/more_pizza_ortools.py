@@ -1,8 +1,7 @@
-import numpy as np
 from ortools.sat.python import cp_model
 
 filenames = ['a_example.in', 'b_small.in', 'c_medium.in', 'd_quite_big.in', 'e_also_big.in']
-index = 4
+index = 2
 file_url = 'more_pizza/data/' + filenames[index]
 # parse input
 file = open(file_url, 'r')
