@@ -1,6 +1,4 @@
-import numpy as np
 from ortools.sat.python import cp_model
-from tabulate import tabulate
 
 values = [
     10, 30, 25, 50, 35, 30, 15, 40, 30, 35, 45, 10, 20, 30, 25

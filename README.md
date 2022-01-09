@@ -5,6 +5,7 @@ This repository presents attempted solutions for some google hashcode challenges
 - 2020 preparation round [more pizza challenge](more_pizza/)
 - 2021 preparation round [even more pizza challenge](/even_more_pizza/)
 - 2020 final round [smartphone assembly challenge](/smartphones_assembly)
+- 2022 preparation round [one pizza](one_pizza/)
 Additional optimization problems:
 - [jobshop scheduling problem](jobshop/)
 - [multiple knapsack problem](knapsack/)

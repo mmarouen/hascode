@@ -1,5 +1,3 @@
-from os import WEXITSTATUS
-import numpy as np
 from ortools.sat.python import cp_model
 
 weights = [48, 30, 19, 36, 36, 27, 42, 42, 36, 24, 30]
