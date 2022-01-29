@@ -50,34 +50,38 @@ model = cp_model.CpModel()
 
 """
 create decision variables:
-- x_r,c,s: whether cell (r,c) belongs to shape s
--occupancy_r,c: whether cell (r,c) is occupied
+- x_r,c,s: whether cell (r,c) corresponds to the upper left corner of shape s
 """
 x = []
-occupancy = {}
 for r in range(n_rows):
     x_r = []
     for c in range(n_cols):
         x_c = []
         for s in range(n_shapes):
             x_c.append(model.NewBoolVar(f'x[{r}][{c}][{s}]'))
-            occupancy[(r, c, s)] = model.NewBoolVar(f'occurancy[({r},{c},{s})]')
         x_r.append(x_c)
     x.append(x_r)
 
+"""
+Derived functions:
+- y_s: total count of shapes 's' used
+- total sliced surface
+"""
 y = []
 for s in range(n_shapes):
     y.append(model.NewIntVar(0, 10, f'y[{s}]'))
     model.Add(y[s] == sum(x[r][c][s] for r in range(n_rows) for c in range(n_cols)))
 
+total_sliced_surface = model.NewIntVar(1, n_rows * n_cols, 'total_sliced_surface')
+model.Add(total_sliced_surface == sum(y[s] * shapes[s][2] for s in range(n_shapes)))
+
 # constraints
-#C1: already satsified by variable definitions
+#C1: already satsified by total sliced surface definition
 
 #C2
 for r in range(n_rows):
     for c in range(n_cols):
         model.Add(sum(x[r][c][s] for s in range(n_shapes)) <= 1)
-        model.Add(sum(occupancy[(r, c, s)] for s in range(n_shapes)) <= 1)
 
 #C3
 for s in range(n_shapes):
@@ -85,15 +89,15 @@ for s in range(n_shapes):
     n_cs = shapes[s][1]
     for r in range(n_rows):
         for c in range(n_cols):
-            for i in range(-n_rs + 1, n_rs):
-                for j in range(-n_cs + 1, n_cs):
-                    if (i == 0 and j == 0):
-                        model.Add(occupancy[(r, c, s)] == 1).OnlyEnforceIf(x[r][c][s])
-                        continue
-                    if (r + i < n_rows and c + j < n_cols and r + i >= 0 and c + j >= 0):
-                        model.Add(x[r + i][c + j][s] == 0).OnlyEnforceIf(x[r][c][s])
-                    if(i >= 0 and j >=0 and r + i < n_rows and c + j < n_cols):
-                            model.Add(occupancy[(r + i, c + j, s)] == 1).OnlyEnforceIf(x[r][c][s])
+            for s_ in range(n_shapes):
+                n_rs_ = shapes[s_][0]
+                n_cs_ = shapes[s_][1]
+                for i in range(-n_rs_ + 1, n_rs):
+                    for j in range(-n_cs_ + 1, n_cs):
+                        if (i == 0 and j == 0 and s_ == s):
+                            continue
+                        if (r + i < n_rows and c + j < n_cols and r + i >= 0 and c + j >= 0):
+                            model.Add(x[r + i][c + j][s_] == 0).OnlyEnforceIf(x[r][c][s])
 
 #C4
 for s in range(n_shapes):
@@ -122,9 +126,7 @@ for s in range(n_shapes):
             model.AddImplication(x[r][c][s], b_ingredients[(r, c, s)])
 
 # objective function
-objective = model.NewIntVar(1, n_rows * n_cols, 'objective')
-model.Add(objective == sum(y[s] * shapes[s][2] for s in range(n_shapes)))
-model.Maximize(objective)
+model.Maximize(total_sliced_surface)
 
 """
 Model solve and display
