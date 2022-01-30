@@ -6,9 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 filenames = ['example.in', 'small.in', 'medium.in', 'big.in']
-index = 1
+index = 2
 file_url = 'pizza/data/' + filenames[index]
-view = True
+view = False
 # parse input
 file = open(file_url, 'r')
 lines = file.readlines()
