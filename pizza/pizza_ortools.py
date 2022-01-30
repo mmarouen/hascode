@@ -157,6 +157,7 @@ if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
     ax.table(cellText=cells, loc='center', cellColours=table_colors)
     ax.set_title(filenames[index])
     plt.savefig('pizza/results/' + filenames[index] + '.jpg')
-    plt.show()
+    if view:
+        plt.show()
 else:
     print('No solution found.')
