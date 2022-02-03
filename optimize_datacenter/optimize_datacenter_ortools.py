@@ -102,32 +102,35 @@ for m in range(n_servers):
                 for m_ in range(n_servers):
                     size_m_ = servers[m_][0]
                     for p_ in range(n_pools):
-                        for i in range(-size_m_ + 1, size_m):
-                            if i == 0 and m_ == m:
-                                continue
-                            if s + i < n_slots and s + i >= 0:
-                                model.Add(x[r][s + i][m_][p_] == 0).OnlyEnforceIf(x[r][s][m][p])
+                        model.Add(sum([x[r][s + i][m_][p_] for i in range(-size_m_ + 1, size_m) if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]) == 0).OnlyEnforceIf(x[r][s][m][p])
+                        #for i in range(-size_m_ + 1, size_m):
+                        #    if i == 0 and m_ == m:
+                        #        continue
+                        #    if s + i < n_slots and s + i >= 0:
+                        #        model.Add(x[r][s + i][m_][p_] == 0).OnlyEnforceIf(x[r][s][m][p])
                 
 #C2
 for (r, s) in unavailable:
     for m in range(n_servers):
         size_m = servers[m][0]
         for p in range(n_pools):
-            for i in range(size_m):
-                if(s - i >= 0):
-                    model.Add(x[r][s - i][m][p] == 0)
+            model.Add(sum([x[r][s - i][m][p] for i in range(size_m) if s - i >= 0]) == 0)
+            #for i in range(size_m):
+            #    if(s - i >= 0):
+            #        model.Add(x[r][s - i][m][p] == 0)
 
 #C3
 for m in range(n_servers):
     size_m = servers[m][0]
     for p in range(n_pools):
         for r in range(n_rows):
-            for i in range(size_m - 1):
-                model.Add(x[r][n_slots - 1 - i][m][p] == 0)
+            model.Add(sum([x[r][n_slots - 1 - i][m][p] for i in range(size_m - 1)]) == 0)
+            #for i in range(size_m - 1):
+            #    model.Add(x[r][n_slots - 1 - i][m][p] == 0)
 
 #C4
 for m in range(n_servers):
-    model.Add(sum(x[r][s][m][p] for r in range(n_rows) for s in range(n_slots) for p in range(n_pools)) <= 1)
+    model.Add(sum([x[r][s][m][p] for r in range(n_rows) for s in range(n_slots) for p in range(n_pools)]) <= 1)
 
 #Objective
 objective = model.NewIntVar(min_capacity, total_capacity, 'minimum_gc')
