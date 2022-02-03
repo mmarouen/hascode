@@ -3,7 +3,7 @@ from ortools.sat.python import cp_model
 from time import time
 from tabulate import tabulate
 import numpy as np
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 filenames = ['example.in', 'dc.in']
 index = 1
@@ -93,6 +93,7 @@ for p in range(n_pools):
     tmp = model.NewIntVar(min_capacity, total_capacity, f'')
     model.AddMinEquality(gc[p], [pool_row_capacity[p][r] for r in range(n_rows)])
 
+#Constraints
 #C1
 for m in range(n_servers):
     size_m = servers[m][0]
@@ -102,7 +103,9 @@ for m in range(n_servers):
                 for m_ in range(n_servers):
                     size_m_ = servers[m_][0]
                     for p_ in range(n_pools):
-                        model.Add(sum([x[r][s + i][m_][p_] for i in range(-size_m_ + 1, size_m) if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]) == 0).OnlyEnforceIf(x[r][s][m][p])
+                        model.Add(sum([x[r][s + i][m_][p_] for i in range(-size_m_ + 1, size_m)\
+                            if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]) == 0)\
+                                .OnlyEnforceIf(x[r][s][m][p])
                         #for i in range(-size_m_ + 1, size_m):
                         #    if i == 0 and m_ == m:
                         #        continue
@@ -137,18 +140,22 @@ objective = model.NewIntVar(min_capacity, total_capacity, 'minimum_gc')
 model.AddMinEquality(objective, gc)
 model.Maximize(objective)
 
+#Break symmetry
+
+
 """
 Model solve and display
 """
 solver = cp_model.CpSolver()
+solver.parameters.add_lp_constraints_lazily = True
 status = solver.Solve(model)
 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
     print("Solutions found!")
     print(f'Optimal total value: {solver.ObjectiveValue()}.')
     cells = [["" for s in range(n_slots)] for r in range(n_rows)]
-    fig, ax = plt.subplots()
-    ax.xaxis.set_visible(False) 
-    ax.yaxis.set_visible(False)
+    #fig, ax = plt.subplots()
+    #ax.xaxis.set_visible(False) 
+    #ax.yaxis.set_visible(False)
     colors = ['r', 'g', 'b', 'c', 'm', 'y']
     table_colors = [['w' for s in range(n_slots)] for r in range(n_rows)]
     for (row, slot) in unavailable:
@@ -164,10 +171,10 @@ if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
                         for i in range(size_m):
                             table_colors[r][s + i] = colors[col_index]
                             cells[r][s + i] = f's{m}'
-    ax.table(cellText=cells, loc='center', cellColours=table_colors)
-    ax.set_title(filenames[index])
-    plt.savefig('optimize_datacenter/results/' + filenames[index] + '.jpg')
-    if view:
-        plt.show()
+    #ax.table(cellText=cells, loc='center', cellColours=table_colors)
+    #ax.set_title(filenames[index])
+    #plt.savefig('optimize_datacenter/results/' + filenames[index] + '.jpg')
+    #if view:
+    #    plt.show()
 else:
     print('No solution found.')
