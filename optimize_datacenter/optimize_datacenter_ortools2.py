@@ -1,4 +1,5 @@
 from numpy.core.fromnumeric import shape, size
+from numpy.core.function_base import add_newdoc
 from ortools.sat.python import cp_model
 from time import time
 from tabulate import tabulate
@@ -55,7 +56,8 @@ model = cp_model.CpModel()
 
 """
 create decision variables:
-- x_r,s,m,p: whether cell (r,s) of the datacenter corresponds to the leftmost cell of server m in pool p
+- x_r,s,m: whether cell (r,s) of the datacenter corresponds to the leftmost cell of server m
+- y_m,p: whether server m belongs to pool p
 """
 x = []
 for r in range(n_rows):
@@ -63,29 +65,46 @@ for r in range(n_rows):
     for s in range(n_slots):
         x_s = []
         for m in range(n_servers):
-            x_m = []
-            for p in range(n_pools):
-                x_m.append(model.NewBoolVar(f'x[{r}][{s}][{m}][{p}]'))
-            x_s.append(x_m)
+            x_s.append(model.NewBoolVar(f'x[{r}][{s}][{m}]'))
         x_r.append(x_s)
     x.append(x_r)
 
+y = []
+for m in range(n_servers):
+    y_m = []
+    for p in range(n_pools):
+        y_m.append(model.NewBoolVar(f'y[{m}][{p}]'))
+    y.append(y_m)
+
 """
 Derived functions
+z_m,r: whether server 'm' is in row 'r'
 capacity_p: total pool capacity
 pool_row_capacity_p,r: remaining capacity in pool 'p' after row 'r' drops
 gc_p:guaranteed capacity for each pool
 """
+z = []
+for m in range(n_servers):
+    z_m = []
+    for r in range(n_rows):
+        z_m.append(model.NewBoolVar(f'z[{m}][{r}]'))
+        model.AddMultiplicationEquality(z_m[r], [x[r][s][m] for s in range(n_slots)])
+    z.append(z_m)
+
 capacity = []
 pool_row_capacity = []
 for p in range(n_pools):
     capacity.append(model.NewIntVar(min_capacity, total_capacity, f'capacity[{p}]'))
-    model.Add(capacity[p] == sum([x[r][s][m][p] * servers[m][1] for r in range(n_rows) for s in range(n_slots) for m in range(n_servers)]))
-    tmp = []
+    model.Add(capacity[p] == sum([y[m][p] * servers[m][1] for m in range(n_servers)]))
+    pool_row_capacity_r = []
     for r in range(n_rows):
-        tmp.append(model.NewIntVar(min_capacity, total_capacity, f'pool_row_max_capacity[{p}][{r}]'))
-        model.Add(tmp[r] == capacity[p] - sum(x[r][s][m][p] * servers[m][1] for s in range(n_slots) for m in range(n_servers)))
-    pool_row_capacity.append(tmp)
+        pool_row_capacity_r.append(model.NewIntVar(min_capacity, total_capacity, f'pool_row_max_capacity[{p}][{r}]'))
+        tmp = []
+        for m in range(n_servers):
+            tmp.append(model.NewBoolVar(f'tmp[{m}][{r}][{p}]'))
+            model.AddMultiplicationEquality(tmp[m], [z[m][r], y[m][p]])
+        model.Add(pool_row_capacity_r[r] == capacity[p] - sum([tmp[m] * servers[m][1] for m in range(n_servers)]))
+    pool_row_capacity.append(pool_row_capacity_r)
 
 gc = []
 for p in range(n_pools):
@@ -99,41 +118,38 @@ for m in range(n_servers):
     size_m = servers[m][0]
     for r in range(n_rows):
         for s in range(n_slots):
-            for p in range(n_pools):
-                for m_ in range(n_servers):
-                    size_m_ = servers[m_][0]
-                    for p_ in range(n_pools):
-                        model.Add(sum([x[r][s + i][m_][p_] for i in range(-size_m_ + 1, size_m)\
-                            if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]) == 0)\
-                                .OnlyEnforceIf(x[r][s][m][p])
-                        #for i in range(-size_m_ + 1, size_m):
-                        #    if i == 0 and m_ == m:
-                        #        continue
-                        #    if s + i < n_slots and s + i >= 0:
-                        #        model.Add(x[r][s + i][m_][p_] == 0).OnlyEnforceIf(x[r][s][m][p])
+            for m_ in range(n_servers):
+                size_m_ = servers[m_][0]
+                model.Add(sum([x[r][s + i][m_] for i in range(-size_m_ + 1, size_m)\
+                    if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]) == 0)\
+                        .OnlyEnforceIf(x[r][s][m])
+                #for i in range(-size_m_ + 1, size_m):
+                #    if i == 0 and m_ == m:
+                #        continue
+                #    if s + i < n_slots and s + i >= 0:
+                #        model.Add(x[r][s + i][m_][p_] == 0).OnlyEnforceIf(x[r][s][m][p])
                 
 #C2
 for (r, s) in unavailable:
     for m in range(n_servers):
         size_m = servers[m][0]
-        for p in range(n_pools):
-            model.Add(sum([x[r][s - i][m][p] for i in range(size_m) if s - i >= 0]) == 0)
-            #for i in range(size_m):
-            #    if(s - i >= 0):
-            #        model.Add(x[r][s - i][m][p] == 0)
+        model.Add(sum([x[r][s - i][m] for i in range(size_m) if s - i >= 0]) == 0)
+        #for i in range(size_m):
+        #    if(s - i >= 0):
+        #        model.Add(x[r][s - i][m][p] == 0)
 
 #C3
 for m in range(n_servers):
     size_m = servers[m][0]
-    for p in range(n_pools):
-        for r in range(n_rows):
-            model.Add(sum([x[r][n_slots - 1 - i][m][p] for i in range(size_m - 1)]) == 0)
-            #for i in range(size_m - 1):
-            #    model.Add(x[r][n_slots - 1 - i][m][p] == 0)
+    for r in range(n_rows):
+        model.Add(sum([x[r][n_slots - 1 - i][m] for i in range(size_m - 1)]) == 0)
+        #for i in range(size_m - 1):
+        #    model.Add(x[r][n_slots - 1 - i][m][p] == 0)
 
-#C4
+#C4 / C5
 for m in range(n_servers):
-    model.Add(sum([x[r][s][m][p] for r in range(n_rows) for s in range(n_slots) for p in range(n_pools)]) <= 1)
+    model.Add(sum([x[r][s][m] for r in range(n_rows) for s in range(n_slots)]) == sum([y[m][p] for p in range(n_pools)]))
+    model.Add(sum([y[m][p] for p in range(n_pools)]) <= 1)
 
 #Objective
 objective = model.NewIntVar(min_capacity, total_capacity, 'minimum_gc')
@@ -152,6 +168,9 @@ status = solver.Solve(model)
 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
     print("Solutions found!")
     print(f'Optimal total value: {solver.ObjectiveValue()}.')
+    for m in range(n_servers):
+        for p in range(n_pools):
+            print(f'y[{m}][{p}] = {solver.Value(y[m][p])}')
     cells = [["" for s in range(n_slots)] for r in range(n_rows)]
     fig, ax = plt.subplots()
     ax.xaxis.set_visible(False) 
@@ -166,7 +185,7 @@ if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
             size_m = servers[m][0]
             for s in range(n_slots):
                 for r in range(n_rows):
-                    if(solver.Value(x[r][s][m][p])):
+                    if(solver.Value(x[r][s][m]) * solver.Value(y[m][p])):
                         print(f'({r},{s},{m},{p})')
                         for i in range(size_m):
                             table_colors[r][s + i] = colors[col_index]
