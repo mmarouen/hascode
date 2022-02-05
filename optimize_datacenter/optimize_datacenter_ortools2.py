@@ -88,7 +88,9 @@ for m in range(n_servers):
     z_m = []
     for r in range(n_rows):
         z_m.append(model.NewBoolVar(f'z[{m}][{r}]'))
-        model.AddMultiplicationEquality(z_m[r], [x[r][s][m] for s in range(n_slots)])
+        model.Add(sum([x[r][s][m] for s in range(n_slots)]) > 0).OnlyEnforceIf(z_m[r])
+        model.Add(sum([x[r][s][m] for s in range(n_slots)]) == 0).OnlyEnforceIf(z_m[r].Not())
+        #model.AddMultiplicationEquality(z_m[r], [x[r][s][m] for s in range(n_slots)])
     z.append(z_m)
 
 capacity = []
@@ -109,7 +111,6 @@ for p in range(n_pools):
 gc = []
 for p in range(n_pools):
     gc.append(model.NewIntVar(min_capacity, total_capacity, f'gc[{p}]'))
-    tmp = model.NewIntVar(min_capacity, total_capacity, f'')
     model.AddMinEquality(gc[p], [pool_row_capacity[p][r] for r in range(n_rows)])
 
 #Constraints
@@ -157,7 +158,12 @@ model.AddMinEquality(objective, gc)
 model.Maximize(objective)
 
 #Break symmetry
-
+#S1
+capacity_list = [servers[m][1] for m in range(n_servers)]
+for p in range(n_pools):
+    imax = np.argmax(capacity_list)
+    model.Add(y[imax][p] == 1)
+    capacity_list[imax] = 0
 
 """
 Model solve and display
@@ -168,9 +174,11 @@ status = solver.Solve(model)
 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
     print("Solutions found!")
     print(f'Optimal total value: {solver.ObjectiveValue()}.')
-    for m in range(n_servers):
-        for p in range(n_pools):
-            print(f'y[{m}][{p}] = {solver.Value(y[m][p])}')
+    for p in range(n_pools):
+        print(f'capacity pool {p}: {solver.Value(capacity[p])}')
+        for r in range(n_rows):
+            print(f'pool[{p}][{r}]:{solver.Value(pool_row_capacity[p][r])}')
+
     cells = [["" for s in range(n_slots)] for r in range(n_rows)]
     fig, ax = plt.subplots()
     ax.xaxis.set_visible(False) 

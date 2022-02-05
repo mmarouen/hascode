@@ -6,9 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 filenames = ['example.in', 'dc.in']
-index = 1
+index = 0
 file_url = 'optimize_datacenter/data/' + filenames[index]
-view = False
+view = True
 # parse input
 file = open(file_url, 'r')
 lines = file.readlines()
