@@ -171,6 +171,24 @@ for p in range(n_pools):
     model.Add(y[imax][p] == 1)
     capacity_list[imax] = 0
 
+#S2
+for r in range(n_rows):
+    for m in range(n_servers):
+        size_m = servers[m][0]
+        for m_ in range(n_servers):
+            size_m_ = servers[m_][0]
+            consecutive = model.NewBoolVar('consecutive')
+            model.Add(x[r][m_] == x[r][m] + size_m).OnlyEnforceIf(consecutive)
+            model.Add(x[r][m_] != x[r][m] + size_m).OnlyEnforceIf(consecutive.Not())
+            sorted_size = model.NewBoolVar('sorted_size')
+            model.Add(size_m_ <= size_m).OnlyEnforceIf(sorted_size)
+            model.Add(size_m_ > size_m).OnlyEnforceIf(sorted_size.Not())
+            consecutive_sorted = model.NewBoolVar('consecutive_sorted')
+            model.AddImplication(consecutive_sorted, z[m][r])
+            model.AddImplication(consecutive_sorted, z[m_][r])
+            model.AddImplication(consecutive_sorted, sorted_size)
+            model.AddImplication(consecutive_sorted, consecutive)
+
 """
 Model solve and display
 """
