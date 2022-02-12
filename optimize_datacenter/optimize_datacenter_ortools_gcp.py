@@ -159,7 +159,7 @@ for m in range(n_servers):
 
 
 #Objective
-objective = model.NewIntVar(min_capacity, total_capacity, 'minimum_gc')
+objective = model.NewIntVar(min_capacity * (n_rows - 1), total_capacity // n_pools, 'minimum_gc')
 model.AddMinEquality(objective, gc)
 model.Maximize(objective)
 
