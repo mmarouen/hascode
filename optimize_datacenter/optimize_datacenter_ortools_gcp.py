@@ -94,11 +94,11 @@ for m in range(n_servers):
 capacity = []
 pool_row_capacity = []
 for p in range(n_pools):
-    capacity.append(model.NewIntVar(min_capacity, total_capacity, f'capacity[{p}]'))
+    capacity.append(model.NewIntVar(min_capacity * n_rows, total_capacity // n_pools, f'capacity[{p}]'))
     model.Add(capacity[p] == sum([y[m][p] * servers[m][1] for m in range(n_servers)]))
     pool_row_capacity_r = []
     for r in range(n_rows):
-        pool_row_capacity_r.append(model.NewIntVar(min_capacity, total_capacity, f'pool_row_max_capacity[{p}][{r}]'))
+        pool_row_capacity_r.append(model.NewIntVar(min_capacity * (n_rows - 1), total_capacity // n_pools, f'pool_row_max_capacity[{p}][{r}]'))
         tmp = []
         for m in range(n_servers):
             tmp.append(model.NewBoolVar(f'tmp[{m}][{r}][{p}]'))
@@ -108,7 +108,7 @@ for p in range(n_pools):
 
 gc = []
 for p in range(n_pools):
-    gc.append(model.NewIntVar(min_capacity, total_capacity, f'gc[{p}]'))
+    gc.append(model.NewIntVar(min_capacity * (n_rows - 1), total_capacity // n_pools, f'gc[{p}]'))
     model.AddMinEquality(gc[p], [pool_row_capacity[p][r] for r in range(n_rows)])
 
 #Constraints

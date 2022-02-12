@@ -8,9 +8,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 filenames = ['example.in', 'dc.in']
-index = 1
+index = 0
 file_url = 'optimize_datacenter/data/' + filenames[index]
-view = False
+view = True
 # parse input
 file = open(file_url, 'r')
 lines = file.readlines()
@@ -31,15 +31,22 @@ for l, line in enumerate(lines):
         servers.append((values[0], values[1]))
 file.close()
 
+# n_pools = 1
 total_capacity = sum([servers[s][1] for s in range(n_servers)])
 min_capacity = min([servers[s][1] for s in range(n_servers)])
 max_capacity = max([servers[s][1] for s in range(n_servers)])
+min_size = min([servers[s][0] for s in range(n_servers)])
+max_size = max([servers[s][0] for s in range(n_servers)])
+
 uu = [(0, 0), (0, 1), (2, 2), (2, 4), (2, 5)]
 unavailable_per_row = [sum([unavailable[u][0] == r for u in range(len(unavailable))]) for r in range(n_rows)]
 print(f'Problem setup for file {filenames[index]}:')
 print(f'Datacenter:\n-Rows {n_rows} x Slots {n_slots}\n-Unavailable slots {n_unavailable}')
 print(f'Pools {n_pools}, Servers {n_servers}')
-print(f'Servers: total capacity {total_capacity}, min capacity {min_capacity}, max capacity {max_capacity}')
+print('Servers:')
+print(f'--Capacity: total capacity {total_capacity}, min capacity {min_capacity}, max capacity {max_capacity}')
+print(f'--Size: min size {min_size}, max size {max_size}')
+
 
 if view:
     print(f'Unavailable slots {unavailable}')
@@ -94,11 +101,11 @@ for m in range(n_servers):
 capacity = []
 pool_row_capacity = []
 for p in range(n_pools):
-    capacity.append(model.NewIntVar(min_capacity, total_capacity, f'capacity[{p}]'))
+    capacity.append(model.NewIntVar(min_capacity * n_rows, total_capacity // n_pools, f'capacity[{p}]'))
     model.Add(capacity[p] == sum([y[m][p] * servers[m][1] for m in range(n_servers)]))
     pool_row_capacity_r = []
     for r in range(n_rows):
-        pool_row_capacity_r.append(model.NewIntVar(min_capacity, total_capacity, f'pool_row_max_capacity[{p}][{r}]'))
+        pool_row_capacity_r.append(model.NewIntVar(min_capacity * (n_rows - 1), total_capacity // n_pools, f'pool_row_max_capacity[{p}][{r}]'))
         tmp = []
         for m in range(n_servers):
             tmp.append(model.NewBoolVar(f'tmp[{m}][{r}][{p}]'))
@@ -108,7 +115,7 @@ for p in range(n_pools):
 
 gc = []
 for p in range(n_pools):
-    gc.append(model.NewIntVar(min_capacity, total_capacity, f'gc[{p}]'))
+    gc.append(model.NewIntVar(min_capacity * (n_rows - 1), total_capacity // n_pools, f'gc[{p}]'))
     model.AddMinEquality(gc[p], [pool_row_capacity[p][r] for r in range(n_rows)])
 
 #Constraints
@@ -159,7 +166,7 @@ for m in range(n_servers):
 
 
 #Objective
-objective = model.NewIntVar(min_capacity, total_capacity, 'minimum_gc')
+objective = model.NewIntVar(min_capacity, total_capacity // n_pools, 'minimum_gc')
 model.AddMinEquality(objective, gc)
 model.Maximize(objective)
 
