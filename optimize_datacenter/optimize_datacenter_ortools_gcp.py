@@ -193,7 +193,8 @@ for r in range(n_rows):
 Model solve and display
 """
 solver = cp_model.CpSolver()
-solver.parameters.add_lp_constraints_lazily = True
+solver.parameters.num_search_workers = 16
+solver.parameters.linearization_level = 2
 status = solver.Solve(model)
 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
     print("Solutions found!")
