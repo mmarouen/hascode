@@ -128,6 +128,7 @@ gc = []
 for p in range(n_pools):
     gc.append(model.NewIntVar(min_gc_per_pool, max_gc_capa_per_pool, f'gc[{p}]'))
     model.AddMinEquality(gc[p], [pool_row_capacity[p][r] for r in range(n_rows)])
+print('finished problem formulation')
 
 #Constraints
 #C1
@@ -174,6 +175,7 @@ for r in range(n_rows):
                 model.Add(x[r][m_] > upper_bound).OnlyEnforceIf(tmp_max)
                 model.Add(x[r][m_] <= upper_bound).OnlyEnforceIf(tmp_max.Not())
                 model.AddBoolOr([tmp_min, tmp_max]).OnlyEnforceIf(stop_variable)
+print('finished C1')
 
 #C2
 for (r, s) in unavailable:
@@ -183,12 +185,15 @@ for (r, s) in unavailable:
             if s - i < 0:
                 continue
             model.Add(x[r][m] != s - i)
+print('finished C2')
+
 #C3
 for m in range(n_servers):
     size_m = servers[m][0]
     for r in range(n_rows):
         for i in range(size_m - 1):
             model.Add(x[r][m] != n_slots - 1 - i)
+print('finished C3')
 
 #C4
 for m in range(n_servers):
@@ -211,31 +216,7 @@ for p in range(n_pools):
     imax = np.argmax(capacity_list)
     model.Add(y[imax][p] == 1)
     capacity_list[imax] = 0
-
-"""
-#S2
-sorted_size = {}
-consecutive = {}
-sorted_valid = {}
-for m in range(n_servers):
-    size_m = servers[m][0]
-    for m_ in range(n_servers):
-        size_m_ = servers[m_][0]
-        sorted_size[m, m_] = model.NewBoolVar(f'sorted_size({m},{m_}')
-        model.Add(size_m_ <= size_m).OnlyEnforceIf(sorted_size[m, m_])
-        model.Add(size_m_ > size_m).OnlyEnforceIf(sorted_size[m, m_].Not())
-        for r in range(n_rows):
-            consecutive[r, m, m_] = model.NewBoolVar(f'consecutive({r},{m},{m_}')
-            model.Add(x[r][m_] == x[r][m] + size_m).OnlyEnforceIf(consecutive[r, m, m_])
-            model.Add(x[r][m_] != x[r][m] + size_m).OnlyEnforceIf(consecutive[r, m, m_].Not())
-            sorted_valid[r, m, m_] = model.NewBoolVar(f'consecutive_sorted({m},{m_}')
-            model.AddImplication(sorted_valid[r, m, m_], z[m][r])
-            model.AddImplication(sorted_valid[r, m, m_], z[m_][r])
-            model.AddImplication(sorted_valid[r, m, m_], sorted_size[m, m_])
-            # model.AddImplication(sorted_valid, consecutive)
-            model.Add(consecutive[r, m, m_] == 1).OnlyEnforceIf(sorted_valid[r, m, m_])
-            # model.Add(consecutive == 0).OnlyEnforceIf(sorted_valid.Not())
-"""
+print("finished loading variables")
 
 """
 Model solve and display
