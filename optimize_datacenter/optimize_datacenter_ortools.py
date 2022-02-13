@@ -8,9 +8,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 filenames = ['example.in', 'dc.in']
-index = 1
+index = 0
 file_url = 'optimize_datacenter/data/' + filenames[index]
-view = False
+view = True
 # parse input
 file = open(file_url, 'r')
 lines = file.readlines()
@@ -102,14 +102,20 @@ for m in range(n_servers):
 
 capacity = []
 pool_row_capacity = []
-min_capa_per_row = (median_capacity + min_capacity) // 2
+min_capa_per_row_per_pool = median_capacity
+min_capacity_per_pool = int(median_capacity * n_rows)
+min_gc_per_pool = int(min_capa_per_row_per_pool * (n_rows - 1))
+# min_capa_per_row_per_pool = 0.5 * (median_capacity + min_capacity)
 max_capa_per_pool = total_capacity // n_pools
+max_capa_per_pool_per_row = int(total_capacity / n_pools / n_rows)
+max_gc_capa_per_pool = int(total_capacity * (n_pools - 1) / n_pools)
+print(f'mini capa per pool per row {min_capa_per_row_per_pool}, max capa per pool {max_capa_per_pool}')
 for p in range(n_pools):
-    capacity.append(model.NewIntVar(int(min_capa_per_row * n_rows), max_capa_per_pool, f'capacity[{p}]'))
+    capacity.append(model.NewIntVar(min_capacity_per_pool, max_capa_per_pool, f'capacity[{p}]'))
     model.Add(capacity[p] == sum([y[m][p] * servers[m][1] for m in range(n_servers)]))
     pool_row_capacity_r = []
     for r in range(n_rows):
-        pool_row_capacity_r.append(model.NewIntVar(int(min_capa_per_row * (n_rows - 1)), max_capa_per_pool // (n_rows - 1), f'pool_row_max_capacity[{p}][{r}]'))
+        pool_row_capacity_r.append(model.NewIntVar(min_gc_per_pool, max_gc_capa_per_pool, f'pool_row_max_capacity[{p}][{r}]'))
         tmp = []
         for m in range(n_servers):
             tmp.append(model.NewBoolVar(f'tmp[{m}][{r}][{p}]'))
@@ -119,7 +125,7 @@ for p in range(n_pools):
 
 gc = []
 for p in range(n_pools):
-    gc.append(model.NewIntVar(int(min_capa_per_row * (n_rows - 1)), total_capacity // n_pools // (n_rows - 1), f'gc[{p}]'))
+    gc.append(model.NewIntVar(min_gc_per_pool, max_gc_capa_per_pool, f'gc[{p}]'))
     model.AddMinEquality(gc[p], [pool_row_capacity[p][r] for r in range(n_rows)])
 
 #Constraints
@@ -170,7 +176,7 @@ for m in range(n_servers):
 
 
 #Objective
-objective = model.NewIntVar(int(min_capa_per_row * (n_rows - 1)), total_capacity // n_pools // (n_rows - 1), 'minimum_gc')
+objective = model.NewIntVar(min_gc_per_pool, max_gc_capa_per_pool, 'minimum_gc')
 model.AddMinEquality(objective, gc)
 model.Maximize(objective)
 
@@ -194,11 +200,13 @@ for r in range(n_rows):
             sorted_size = model.NewBoolVar('sorted_size')
             model.Add(size_m_ <= size_m).OnlyEnforceIf(sorted_size)
             model.Add(size_m_ > size_m).OnlyEnforceIf(sorted_size.Not())
-            consecutive_sorted = model.NewBoolVar('consecutive_sorted')
-            model.AddImplication(consecutive_sorted, z[m][r])
-            model.AddImplication(consecutive_sorted, z[m_][r])
-            model.AddImplication(consecutive_sorted, sorted_size)
-            model.AddImplication(consecutive_sorted, consecutive)
+            sorted_valid = model.NewBoolVar('consecutive_sorted')
+            model.AddImplication(sorted_valid, z[m][r])
+            model.AddImplication(sorted_valid, z[m_][r])
+            model.AddImplication(sorted_valid, sorted_size)
+            # model.AddImplication(sorted_valid, consecutive)
+            model.Add(consecutive == 1).OnlyEnforceIf(sorted_valid)
+            # model.Add(consecutive == 0).OnlyEnforceIf(sorted_valid.Not())
 
 """
 Model solve and display
