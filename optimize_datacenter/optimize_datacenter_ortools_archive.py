@@ -148,7 +148,7 @@ def rows_iterator(r, model):
                 blocked_indices = [s + i for i in range(lower_bound, upper_bound)\
                                   if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]
                 model.Add(sum([x[r][i][m_] for i in blocked_indices]) == 0).OnlyEnforceIf(x[r][s][m])
-Parallel(n_jobs=n_rows, backend="threading")(delayed(rows_iterator)(r, model) for r in range(n_rows))
+Parallel(n_jobs=100, backend="threading")(delayed(rows_iterator)(r, model) for r in range(n_rows))
 
 """
 filter_by_occupied = False
