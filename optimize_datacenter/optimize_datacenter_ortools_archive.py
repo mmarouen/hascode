@@ -1,9 +1,11 @@
+from joblib.parallel import delayed
 from numpy.core.fromnumeric import shape, size
 from numpy.core.function_base import add_newdoc
 from ortools.sat.python import cp_model
 from time import time
 from tabulate import tabulate
 import numpy as np
+from joblib import Parallel, delayed
 gcp_mode = True
 if not gcp_mode:
     import matplotlib.pyplot as plt
@@ -109,7 +111,6 @@ for p in range(n_pools):
             model.AddMultiplicationEquality(tmp[m], [z[m][r], y[m][p]])
         model.Add(pool_row_capacity_r[r] == capacity[p] - sum([tmp[m] * servers[m][1] for m in range(n_servers)]))
     pool_row_capacity.append(pool_row_capacity_r)
-
 gc = []
 for p in range(n_pools):
     gc.append(model.NewIntVar(min_gc_per_pool, max_gc_capa_per_pool, f'gc[{p}]'))
@@ -118,11 +119,11 @@ print('finished problem formulation')
 
 #Constraints
 #C1
-filter_by_occupied = False
-for r in range(n_rows):
+def rows_iterator(r, model):
+    filter_by_occupied = False
     u_r = [unavailable[u][1] for u in range(n_unavailable) if unavailable[u][0] == r]
     u_r.sort()
-    filter_by_occupied == len(u_r) > 0
+    filter_by_occupied = len(u_r) > 0
     for s in range(n_slots):
         left_bound = 0
         right_bound = n_slots - 1
@@ -147,6 +148,39 @@ for r in range(n_rows):
                 blocked_indices = [s + i for i in range(lower_bound, upper_bound)\
                                   if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]
                 model.Add(sum([x[r][i][m_] for i in blocked_indices]) == 0).OnlyEnforceIf(x[r][s][m])
+Parallel(n_jobs=n_rows, backend="threading")(delayed(rows_iterator)(r, model) for r in range(n_rows))
+
+"""
+filter_by_occupied = False
+for r in range(n_rows):
+    u_r = [unavailable[u][1] for u in range(n_unavailable) if unavailable[u][0] == r]
+    u_r.sort()
+    filter_by_occupied = len(u_r) > 0
+    for s in range(n_slots):
+        left_bound = 0
+        right_bound = n_slots - 1
+        if filter_by_occupied:
+            if s in u_r:
+                continue
+            if u_r[0] < s:
+                left_bound = max([u for u in u_r if u - s < 0])
+            if u_r[-1] > s:
+                right_bound = min([u for u in u_r if u - s > 0])
+        for m in range(n_servers):
+            size_m = servers[m][0]
+            for m_ in range(n_servers):
+                size_m_ = servers[m_][0]
+                # Symmetry breakers
+                lower_bound = -size_m_ + 1
+                upper_bound = size_m
+                if size_m_ < size_m:
+                    lower_bound = min(lower_bound, left_bound)
+                else:
+                    upper_bound = max(upper_bound,right_bound)
+                blocked_indices = [s + i for i in range(lower_bound, upper_bound)\
+                                  if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]
+                model.Add(sum([x[r][i][m_] for i in blocked_indices]) == 0).OnlyEnforceIf(x[r][s][m])
+"""
 print('finished C1')
 
 #C2
