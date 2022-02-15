@@ -148,7 +148,7 @@ def rows_iterator(r, model):
                 blocked_indices = [s + i for i in range(lower_bound, upper_bound)\
                                   if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]
                 model.Add(sum([x[r][i][m_] for i in blocked_indices]) == 0).OnlyEnforceIf(x[r][s][m])
-Parallel(n_jobs=100, backend="threading")(delayed(rows_iterator)(r, model) for r in range(n_rows))
+Parallel(n_jobs=64, backend="threading")(delayed(rows_iterator)(r, model) for r in range(n_rows))
 
 """
 filter_by_occupied = False
@@ -221,7 +221,7 @@ print('finished model setup\nSolving...')
 Model solve and display
 """
 solver = cp_model.CpSolver()
-solver.parameters.num_search_workers = 100
+solver.parameters.num_search_workers = 64
 solver.parameters.linearization_level = 2
 status = solver.Solve(model)
 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
