@@ -6,12 +6,12 @@ from time import time
 from tabulate import tabulate
 import numpy as np
 from joblib import Parallel, delayed
-gcp_mode = True
+gcp_mode = False
 if not gcp_mode:
     import matplotlib.pyplot as plt
 
 filenames = ['example.in', 'dc.in']
-index = 1
+index = 0
 file_url = 'optimize_datacenter/data/' + filenames[index]
 # parse input
 file = open(file_url, 'r')
@@ -48,6 +48,11 @@ print('Servers:')
 print(f'--Capacity: total capacity {total_capacity}, min capacity {min_capacity},\
 median capacity {median_capacity}, mean capacity {mean_capacity} max capacity {max_capacity}')
 print(f'--Size: min size {min_size}, max size {max_size}')
+
+sizes = range(min_size, max_size + 1)
+servers_sizes = {}
+for size in sizes:
+    servers_sizes[size] = [s for s in range(n_servers) if servers[s][0] == size]
 
 model = cp_model.CpModel()
 
@@ -136,8 +141,7 @@ def rows_iterator(r, model):
                 right_bound = min([u for u in u_r if u - s > 0])
         for m in range(n_servers):
             size_m = servers[m][0]
-            for m_ in range(n_servers):
-                size_m_ = servers[m_][0]
+            for size_m_ in sizes:
                 # Symmetry breakers
                 lower_bound = -size_m_ + 1
                 upper_bound = size_m
@@ -145,9 +149,12 @@ def rows_iterator(r, model):
                     lower_bound = min(lower_bound, left_bound)
                 else:
                     upper_bound = max(upper_bound,right_bound)
-                blocked_indices = [s + i for i in range(lower_bound, upper_bound)\
-                                  if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]
-                model.Add(sum([x[r][i][m_] for i in blocked_indices]) == 0).OnlyEnforceIf(x[r][s][m])
+                #blocked_indices = [s + i for i in range(lower_bound, upper_bound)\
+                #                  if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]
+                model.Add(sum([x[r][s + i][m_] for m_ in servers_sizes[size_m_]\
+                                for i in range(lower_bound, upper_bound)\
+                                if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]) == 0).\
+                                OnlyEnforceIf(x[r][s][m])
 Parallel(n_jobs=64, backend="threading")(delayed(rows_iterator)(r, model) for r in range(n_rows))
 
 """
