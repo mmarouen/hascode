@@ -4,14 +4,13 @@ from ortools.sat.python import cp_model
 from time import time
 from tabulate import tabulate
 import numpy as np
-gcp_mode = False
+gcp_mode = True
 if not gcp_mode:
     import matplotlib.pyplot as plt
 
 filenames = ['example.in', 'dc.in']
 index = 1
 file_url = 'optimize_datacenter/data/' + filenames[index]
-view = False
 # parse input
 file = open(file_url, 'r')
 lines = file.readlines()
@@ -138,17 +137,16 @@ for r in range(n_rows):
             size_m = servers[m][0]
             for m_ in range(n_servers):
                 size_m_ = servers[m_][0]
-                blocked_indices = [s + i for i in range(-size_m_ + 1, size_m)\
-                        if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]
                 # Symmetry breakers
-                lower_bound = min(blocked_indices)
-                upper_bound = max(blocked_indices)
+                lower_bound = -size_m_ + 1
+                upper_bound = size_m
                 if size_m_ < size_m:
                     lower_bound = min(lower_bound, left_bound)
                 else:
                     upper_bound = max(upper_bound,right_bound)
-                blocked_indices = range(lower_bound, upper_bound)
-                model.Add(sum([x[r][s + i][m_] for i in blocked_indices]) == 0).OnlyEnforceIf(x[r][s][m])
+                blocked_indices = [s + i for i in range(lower_bound, upper_bound)\
+                                  if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]
+                model.Add(sum([x[r][i][m_] for i in blocked_indices]) == 0).OnlyEnforceIf(x[r][s][m])
 print('finished C1')
 
 #C2
@@ -183,6 +181,7 @@ for p in range(n_pools):
     imax = np.argmax(capacity_list)
     model.Add(y[imax][p] == 1)
     capacity_list[imax] = 0
+print('finished model setup\nSolving...')
 
 """
 Model solve and display
@@ -194,11 +193,11 @@ status = solver.Solve(model)
 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
     print("Solutions found!")
     print(f'Optimal total value: {solver.ObjectiveValue()}.')
-    for p in range(n_pools):
-        print(f'capacity pool {p}: {solver.Value(capacity[p])}')
-        for r in range(n_rows):
-            print(f'pool[{p}][{r}]:{solver.Value(pool_row_capacity[p][r])}')
-    if gcp_mode:
+    if not gcp_mode:
+        for p in range(n_pools):
+            print(f'capacity pool {p}: {solver.Value(capacity[p])}')
+            for r in range(n_rows):
+                print(f'pool[{p}][{r}]:{solver.Value(pool_row_capacity[p][r])}')
         cells = [["" for s in range(n_slots)] for r in range(n_rows)]
         fig, ax = plt.subplots()
         ax.xaxis.set_visible(False) 
@@ -221,7 +220,6 @@ if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
         ax.table(cellText=cells, loc='center', cellColours=table_colors)
         ax.set_title(filenames[index])
         plt.savefig('optimize_datacenter/results/' + filenames[index] + '.jpg')
-        if view:
-            plt.show()
+        plt.show()
 else:
     print('No solution found.')
