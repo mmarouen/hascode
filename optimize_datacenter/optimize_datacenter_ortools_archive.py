@@ -51,15 +51,14 @@ print(f'--Size: min size {min_size}, max size {max_size}')
 
 sizes = range(min_size, max_size + 1)
 servers_sizes = {}
-for size in sizes:
-    servers_sizes[size] = [s for s in range(n_servers) if servers[s][0] == size]
+for size_s in sizes:
+    servers_sizes[size_s] = [s for s in range(n_servers) if servers[s][0] == size_s]
 
 unavailable_list = []
 for r in range(n_rows):
     u_r = [unavailable[u][1] for u in range(n_unavailable) if unavailable[u][0] == r]
     u_r.sort()
     unavailable_list.append(u_r)
-
 
 model = cp_model.CpModel()
 
@@ -148,10 +147,10 @@ def rows_iterator(r, s, m, model):
         # Symmetry breakers
         lower_bound = -size_m_ + 1
         upper_bound = size_m
-        if size_m_ < size_m:
-            lower_bound = min(lower_bound, left_bound)
-        else:
-            upper_bound = max(upper_bound,right_bound)
+        #if size_m_ < size_m:
+        #    lower_bound = min(lower_bound, left_bound)
+        #else:
+        #    upper_bound = max(upper_bound,right_bound)
         model.Add(sum([x[r][s + i][m_] for m_ in servers_sizes[size_m_]\
                         for i in range(lower_bound, upper_bound)\
                         if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]) == 0).\
