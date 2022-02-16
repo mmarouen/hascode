@@ -6,12 +6,12 @@ from time import time
 from tabulate import tabulate
 import numpy as np
 from joblib import Parallel, delayed
-gcp_mode = False
+gcp_mode = True
 if not gcp_mode:
     import matplotlib.pyplot as plt
 
 filenames = ['example.in', 'dc.in']
-index = 0
+index = 1
 file_url = 'optimize_datacenter/data/' + filenames[index]
 # parse input
 file = open(file_url, 'r')
@@ -53,6 +53,13 @@ sizes = range(min_size, max_size + 1)
 servers_sizes = {}
 for size in sizes:
     servers_sizes[size] = [s for s in range(n_servers) if servers[s][0] == size]
+
+unavailable_list = []
+for r in range(n_rows):
+    u_r = [unavailable[u][1] for u in range(n_unavailable) if unavailable[u][0] == r]
+    u_r.sort()
+    unavailable_list.append(u_r)
+
 
 model = cp_model.CpModel()
 
@@ -124,38 +131,33 @@ print('finished problem formulation')
 
 #Constraints
 #C1
-def rows_iterator(r, model):
-    filter_by_occupied = False
-    u_r = [unavailable[u][1] for u in range(n_unavailable) if unavailable[u][0] == r]
-    u_r.sort()
+def rows_iterator(r, s, m, model):
+    u_r = unavailable_list[r]
     filter_by_occupied = len(u_r) > 0
-    for s in range(n_slots):
-        left_bound = 0
-        right_bound = n_slots - 1
-        if filter_by_occupied:
-            if s in u_r:
-                continue
-            if u_r[0] < s:
-                left_bound = max([u for u in u_r if u - s < 0])
-            if u_r[-1] > s:
-                right_bound = min([u for u in u_r if u - s > 0])
-        for m in range(n_servers):
-            size_m = servers[m][0]
-            for size_m_ in sizes:
-                # Symmetry breakers
-                lower_bound = -size_m_ + 1
-                upper_bound = size_m
-                if size_m_ < size_m:
-                    lower_bound = min(lower_bound, left_bound)
-                else:
-                    upper_bound = max(upper_bound,right_bound)
-                #blocked_indices = [s + i for i in range(lower_bound, upper_bound)\
-                #                  if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]
-                model.Add(sum([x[r][s + i][m_] for m_ in servers_sizes[size_m_]\
-                                for i in range(lower_bound, upper_bound)\
-                                if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]) == 0).\
-                                OnlyEnforceIf(x[r][s][m])
-Parallel(n_jobs=64, backend="threading")(delayed(rows_iterator)(r, model) for r in range(n_rows))
+    left_bound = 0
+    right_bound = n_slots - 1
+    if filter_by_occupied:
+        if s in u_r:
+            return
+        if u_r[0] < s:
+            left_bound = max([u for u in u_r if u - s < 0])
+        if u_r[-1] > s:
+            right_bound = min([u for u in u_r if u - s > 0])
+    size_m = servers[m][0]
+    for size_m_ in sizes:
+        # Symmetry breakers
+        lower_bound = -size_m_ + 1
+        upper_bound = size_m
+        if size_m_ < size_m:
+            lower_bound = min(lower_bound, left_bound)
+        else:
+            upper_bound = max(upper_bound,right_bound)
+        model.Add(sum([x[r][s + i][m_] for m_ in servers_sizes[size_m_]\
+                        for i in range(lower_bound, upper_bound)\
+                        if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]) == 0).\
+                        OnlyEnforceIf(x[r][s][m])
+Parallel(n_jobs=64, backend="threading", verbose=1)(delayed(rows_iterator)(r, s, m, model)\
+                for r in range(n_rows) for s in range(n_slots) for m in range(n_servers))
 
 """
 filter_by_occupied = False
