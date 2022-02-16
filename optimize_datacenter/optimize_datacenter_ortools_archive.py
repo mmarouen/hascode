@@ -132,16 +132,16 @@ print('finished problem formulation')
 #C1
 def rows_iterator(r, s, m, model):
     u_r = unavailable_list[r]
-    filter_by_occupied = len(u_r) > 0
-    left_bound = 0
-    right_bound = n_slots - 1
-    if filter_by_occupied:
-        if s in u_r:
-            return
-        if u_r[0] < s:
-            left_bound = max([u for u in u_r if u - s < 0])
-        if u_r[-1] > s:
-            right_bound = min([u for u in u_r if u - s > 0])
+    #filter_by_occupied = len(u_r) > 0
+    #left_bound = 0
+    #right_bound = n_slots - 1
+    #if filter_by_occupied:
+    if s in u_r:
+        return
+        #if u_r[0] < s:
+        #    left_bound = max([u for u in u_r if u - s < 0])
+        #if u_r[-1] > s:
+        #    right_bound = min([u for u in u_r if u - s > 0])
     size_m = servers[m][0]
     for size_m_ in sizes:
         # Symmetry breakers
