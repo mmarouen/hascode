@@ -175,8 +175,10 @@ print('finished problem formulation\nSolving...')
 solver = cp_model.CpSolver()
 solver.parameters.num_search_workers = 100
 solver.parameters.linearization_level = 2
+now = time()
 status = solver.Solve(model)
 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
+    print(f'total runtime {int(time() - now)}s')
     print("Solutions found!")
     print(f'Optimal total value: {solver.ObjectiveValue()}.')
     if not gcp_mode:
