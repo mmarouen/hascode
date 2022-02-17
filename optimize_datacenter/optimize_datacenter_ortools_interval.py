@@ -170,13 +170,12 @@ model.Maximize(objective)
 
 #Break symmetry
 #S1
-"""
 capacity_list = [servers[m][1] for m in range(n_servers)]
 for p in range(n_pools):
     imax = np.argmax(capacity_list)
     model.Add(y[imax][p] == 1)
     capacity_list[imax] = 0
-"""
+
 """
 Model solve and display
 """
