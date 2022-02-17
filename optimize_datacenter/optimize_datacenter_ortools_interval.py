@@ -9,12 +9,12 @@ import numpy as np
 from joblib import Parallel, delayed
 import collections
 
-gcp_mode = True
+gcp_mode = False
 if not gcp_mode:
     import matplotlib.pyplot as plt
 
 filenames = ['example.in', 'dc.in']
-index = 1
+index = 0
 file_url = 'optimize_datacenter/data/' + filenames[index]
 # parse input
 file = open(file_url, 'r')
@@ -100,13 +100,13 @@ gc_p:guaranteed capacity for each pool
 
 capacity = []
 pool_row_capacity = []
-min_capa_per_row_per_pool = min_capacity
-min_capacity_per_pool = int(median_capacity * n_rows)
+# min_capa_per_row_per_pool = min_capacity
+min_capa_per_row_per_pool = int(0.5 * (median_capacity + min_capacity))
+min_capacity_per_pool = int(min_capa_per_row_per_pool * n_rows)
 min_gc_per_pool = int(min_capa_per_row_per_pool * (n_rows - 1))
-# min_capa_per_row_per_pool = 0.5 * (median_capacity + min_capacity)
-max_capa_per_pool = total_capacity // n_pools
-max_capa_per_pool_per_row = int(total_capacity / n_pools / n_rows)
-max_gc_capa_per_pool = int(total_capacity * (n_pools - 1) / n_pools)
+max_capa_per_pool = int(1.5 * total_capacity / n_pools)
+max_capa_per_pool_per_row = int(1.5 * total_capacity / n_pools / n_rows)
+max_gc_capa_per_pool = int(max_capa_per_pool_per_row * (n_rows - 1))
 print(f'mini capa per pool per row {min_capa_per_row_per_pool}, max capa per pool {max_capa_per_pool}')
 for p in range(n_pools):
     capacity.append(model.NewIntVar(min_capacity_per_pool, max_capa_per_pool, f'capacity[{p}]'))
@@ -168,13 +168,21 @@ objective = model.NewIntVar(min_gc_per_pool, max_gc_capa_per_pool, 'minimum_gc')
 model.AddMinEquality(objective, gc)
 model.Maximize(objective)
 
+# symmetry break
+capacity_list = [servers[m][1] for m in range(n_servers)]
+for p in range(n_pools):
+    imax = np.argmax(capacity_list)
+    model.Add(y[imax][p] == 1)
+    capacity_list[imax] = 0
+
 """
 Model solve and display
 """
 print('finished problem formulation\nSolving...')
 solver = cp_model.CpSolver()
-solver.parameters.num_search_workers = 100
+solver.parameters.num_search_workers = 64
 solver.parameters.linearization_level = 2
+solver.parameters.search_branching = cp_model.FIXED_SEARCH
 now = time()
 status = solver.Solve(model)
 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
