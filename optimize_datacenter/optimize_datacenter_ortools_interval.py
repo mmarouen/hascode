@@ -100,7 +100,7 @@ gc_p:guaranteed capacity for each pool
 
 capacity = []
 pool_row_capacity = []
-min_capa_per_row_per_pool = median_capacity
+min_capa_per_row_per_pool = min_capacity
 min_capacity_per_pool = int(median_capacity * n_rows)
 min_gc_per_pool = int(min_capa_per_row_per_pool * (n_rows - 1))
 # min_capa_per_row_per_pool = 0.5 * (median_capacity + min_capacity)
@@ -167,14 +167,6 @@ print('formulate objective')
 objective = model.NewIntVar(min_gc_per_pool, max_gc_capa_per_pool, 'minimum_gc')
 model.AddMinEquality(objective, gc)
 model.Maximize(objective)
-
-#Break symmetry
-#S1
-capacity_list = [servers[m][1] for m in range(n_servers)]
-for p in range(n_pools):
-    imax = np.argmax(capacity_list)
-    model.Add(y[imax][p] == 1)
-    capacity_list[imax] = 0
 
 """
 Model solve and display
