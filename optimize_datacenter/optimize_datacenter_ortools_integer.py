@@ -1,11 +1,10 @@
-from joblib.parallel import delayed
 from numpy.core.fromnumeric import shape, size
 from numpy.core.function_base import add_newdoc
+from numpy.core.shape_base import block
 from ortools.sat.python import cp_model
 from time import time
 from tabulate import tabulate
 import numpy as np
-from joblib import Parallel, delayed
 gcp_mode = True
 if not gcp_mode:
     import matplotlib.pyplot as plt
@@ -13,6 +12,7 @@ if not gcp_mode:
 filenames = ['example.in', 'dc.in']
 index = 1
 file_url = 'optimize_datacenter/data/' + filenames[index]
+view = False
 # parse input
 file = open(file_url, 'r')
 lines = file.readlines()
@@ -33,6 +33,7 @@ for l, line in enumerate(lines):
         servers.append((values[0], values[1]))
 file.close()
 
+# n_pools = 1
 total_capacity = sum([servers[s][1] for s in range(n_servers)])
 min_capacity = min([servers[s][1] for s in range(n_servers)])
 max_capacity = max([servers[s][1] for s in range(n_servers)])
@@ -49,32 +50,31 @@ print(f'--Capacity: total capacity {total_capacity}, min capacity {min_capacity}
 median capacity {median_capacity}, mean capacity {mean_capacity} max capacity {max_capacity}')
 print(f'--Size: min size {min_size}, max size {max_size}')
 
-sizes = range(min_size, max_size + 1)
-servers_sizes = {}
-for size_s in sizes:
-    servers_sizes[size_s] = [s for s in range(n_servers) if servers[s][0] == size_s]
 
-unavailable_list = []
-for r in range(n_rows):
-    u_r = [unavailable[u][1] for u in range(n_unavailable) if unavailable[u][0] == r]
-    u_r.sort()
-    unavailable_list.append(u_r)
+if view:
+    print(f'Unavailable slots {unavailable}')
+    print(f'unavailable slots per row {unavailable_per_row}')
+    print(f'Servers: {servers}')
+    datacenter = np.array([[' ' for _ in range(n_slots)] for _ in range(n_rows)])
+    for u in unavailable:
+        datacenter[u[0]][u[1]] = 'X'
+    table = tabulate(datacenter, tablefmt="fancy_grid")
+    print('Datacenter rows x slots')
+    print(table)
+print('----------------------------')
 
 model = cp_model.CpModel()
 
 """
 create decision variables:
-- x_r,s,m: whether cell (r,s) of the datacenter corresponds to the leftmost cell of server m
+- x_r,m = s cell slot index 's' the leftmost cell of server m in row 'r'
 - y_m,p: whether server m belongs to pool p
 """
 x = []
 for r in range(n_rows):
     x_r = []
-    for s in range(n_slots):
-        x_s = []
-        for m in range(n_servers):
-            x_s.append(model.NewBoolVar(f'x[{r}][{s}][{m}]'))
-        x_r.append(x_s)
+    for m in range(n_servers):
+        x_r.append(model.NewIntVar(-1, n_slots - 1, f'x[{r}][{m}]'))
     x.append(x_r)
 
 y = []
@@ -87,17 +87,19 @@ for m in range(n_servers):
 """
 Derived functions
 z_m,r: whether server 'm' is in row 'r'
+u_m,r,p: server m belongs to pool p in row r
 capacity_p: total pool capacity
 pool_row_capacity_p,r: remaining capacity in pool 'p' after row 'r' drops
 gc_p:guaranteed capacity for each pool
 """
+
 z = []
 for m in range(n_servers):
     z_m = []
     for r in range(n_rows):
         z_m.append(model.NewBoolVar(f'z[{m}][{r}]'))
-        model.Add(sum([x[r][s][m] for s in range(n_slots)]) > 0).OnlyEnforceIf(z_m[r])
-        model.Add(sum([x[r][s][m] for s in range(n_slots)]) == 0).OnlyEnforceIf(z_m[r].Not())
+        model.Add(x[r][m] > -1).OnlyEnforceIf(z_m[r])
+        model.Add(x[r][m] == -1).OnlyEnforceIf(z_m[r].Not())
     z.append(z_m)
 
 capacity = []
@@ -122,6 +124,7 @@ for p in range(n_pools):
             model.AddMultiplicationEquality(tmp[m], [z[m][r], y[m][p]])
         model.Add(pool_row_capacity_r[r] == capacity[p] - sum([tmp[m] * servers[m][1] for m in range(n_servers)]))
     pool_row_capacity.append(pool_row_capacity_r)
+
 gc = []
 for p in range(n_pools):
     gc.append(model.NewIntVar(min_gc_per_pool, max_gc_capa_per_pool, f'gc[{p}]'))
@@ -130,40 +133,11 @@ print('finished problem formulation')
 
 #Constraints
 #C1
-def rows_iterator(r, s, m, model):
-    u_r = unavailable_list[r]
-    #filter_by_occupied = len(u_r) > 0
-    #left_bound = 0
-    #right_bound = n_slots - 1
-    #if filter_by_occupied:
-    if s in u_r:
-        return
-        #if u_r[0] < s:
-        #    left_bound = max([u for u in u_r if u - s < 0])
-        #if u_r[-1] > s:
-        #    right_bound = min([u for u in u_r if u - s > 0])
-    size_m = servers[m][0]
-    for size_m_ in sizes:
-        # Symmetry breakers
-        lower_bound = -size_m_ + 1
-        upper_bound = size_m
-        #if size_m_ < size_m:
-        #    lower_bound = min(lower_bound, left_bound)
-        #else:
-        #    upper_bound = max(upper_bound,right_bound)
-        model.Add(sum([x[r][s + i][m_] for m_ in servers_sizes[size_m_]\
-                        for i in range(lower_bound, upper_bound)\
-                        if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]) == 0).\
-                        OnlyEnforceIf(x[r][s][m])
-Parallel(n_jobs=64, backend="threading", verbose=1)(delayed(rows_iterator)(r, s, m, model)\
-                for r in range(n_rows) for s in range(n_slots) for m in range(n_servers))
-
-"""
 filter_by_occupied = False
 for r in range(n_rows):
     u_r = [unavailable[u][1] for u in range(n_unavailable) if unavailable[u][0] == r]
     u_r.sort()
-    filter_by_occupied = len(u_r) > 0
+    filter_by_occupied == len(u_r) > 0
     for s in range(n_slots):
         left_bound = 0
         right_bound = n_slots - 1
@@ -176,40 +150,62 @@ for r in range(n_rows):
                 right_bound = min([u for u in u_r if u - s > 0])
         for m in range(n_servers):
             size_m = servers[m][0]
+            stop_variable = model.NewBoolVar('stop_variable')
+            # stop variable == (x_r,m == s)
+            model.Add(x[r][m] == s).OnlyEnforceIf(stop_variable)
+            model.Add(x[r][m] != s).OnlyEnforceIf(stop_variable.Not())
             for m_ in range(n_servers):
                 size_m_ = servers[m_][0]
-                # Symmetry breakers
-                lower_bound = -size_m_ + 1
-                upper_bound = size_m
+                blocked_indices = [s + i for i in range(-size_m_ + 1, size_m)\
+                        if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]
+                if len(blocked_indices) == 0 or m_ == m:
+                    continue
+                lower_bound = min(blocked_indices)
+                upper_bound = max(blocked_indices)
+                # Symmetry break: if 2 servers will be placed next to each other sort by size in decreasing order
+                # get all unavailable slots before and after slot 's' in row 'r'
+                #if size_m_ < size_m:
+                    # block all cells
                 if size_m_ < size_m:
                     lower_bound = min(lower_bound, left_bound)
                 else:
                     upper_bound = max(upper_bound,right_bound)
-                blocked_indices = [s + i for i in range(lower_bound, upper_bound)\
-                                  if ((s + i < n_slots) and (s + i >= 0) and (i != 0 or m_ != m))]
-                model.Add(sum([x[r][i][m_] for i in blocked_indices]) == 0).OnlyEnforceIf(x[r][s][m])
-"""
+                tmp_min = model.NewBoolVar('min_cutoff')
+                # tmp_min = x[r][m_] < lower_bound
+                model.Add(x[r][m_] < lower_bound).OnlyEnforceIf(tmp_min)
+                model.Add(x[r][m_] >= lower_bound).OnlyEnforceIf(tmp_min.Not())
+                tmp_max = model.NewBoolVar('max_cutoff')
+                model.Add(x[r][m_] > upper_bound).OnlyEnforceIf(tmp_max)
+                model.Add(x[r][m_] <= upper_bound).OnlyEnforceIf(tmp_max.Not())
+                model.AddBoolOr([tmp_min, tmp_max]).OnlyEnforceIf(stop_variable)
 print('finished C1')
 
 #C2
 for (r, s) in unavailable:
     for m in range(n_servers):
         size_m = servers[m][0]
-        model.Add(sum([x[r][s - i][m] for i in range(size_m) if s - i >= 0]) == 0)
+        for i in range(size_m):
+            if s - i < 0:
+                continue
+            model.Add(x[r][m] != s - i)
 print('finished C2')
 
 #C3
 for m in range(n_servers):
     size_m = servers[m][0]
     for r in range(n_rows):
-        model.Add(sum([x[r][n_slots - 1 - i][m] for i in range(size_m - 1)]) == 0)
+        for i in range(size_m - 1):
+            model.Add(x[r][m] != n_slots - 1 - i)
 print('finished C3')
 
-#C4 / C5
+#C4
 for m in range(n_servers):
-    model.Add(sum([x[r][s][m] for r in range(n_rows) for s in range(n_slots)]) == sum([y[m][p] for p in range(n_pools)]))
+    model.Add(sum([z[m][r] for r in range(n_rows)]) == sum([y[m][p] for p in range(n_pools)]))
+
+#C5
+for m in range(n_servers):
     model.Add(sum([y[m][p] for p in range(n_pools)]) <= 1)
-print('finished C4')
+
 
 #Objective
 objective = model.NewIntVar(min_gc_per_pool, max_gc_capa_per_pool, 'minimum_gc')
@@ -218,28 +214,27 @@ model.Maximize(objective)
 
 #Break symmetry
 #S1
+# polarized server distribution: max/min binding per pool and row
+
 capacity_list = [servers[m][1] for m in range(n_servers)]
 for p in range(n_pools):
     imax = np.argmax(capacity_list)
     model.Add(y[imax][p] == 1)
     capacity_list[imax] = 0
-print('finished model setup\nSolving...')
+print("finished loading variables")
 
 """
 Model solve and display
 """
 solver = cp_model.CpSolver()
-solver.parameters.num_search_workers = 64
+solver.parameters.num_search_workers = 100
 solver.parameters.linearization_level = 2
+
 status = solver.Solve(model)
 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
     print("Solutions found!")
     print(f'Optimal total value: {solver.ObjectiveValue()}.')
     if not gcp_mode:
-        for p in range(n_pools):
-            print(f'capacity pool {p}: {solver.Value(capacity[p])}')
-            for r in range(n_rows):
-                print(f'pool[{p}][{r}]:{solver.Value(pool_row_capacity[p][r])}')
         cells = [["" for s in range(n_slots)] for r in range(n_rows)]
         fig, ax = plt.subplots()
         ax.xaxis.set_visible(False) 
@@ -252,16 +247,17 @@ if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
             col_index = p % len(colors)
             for m in range(n_servers):
                 size_m = servers[m][0]
-                for s in range(n_slots):
-                    for r in range(n_rows):
-                        if(solver.Value(x[r][s][m]) * solver.Value(y[m][p])):
-                            print(f'({r},{s},{m},{p})')
-                            for i in range(size_m):
-                                table_colors[r][s + i] = colors[col_index]
-                                cells[r][s + i] = f's{m}'
+                for r in range(n_rows):
+                    if(solver.Value(z[m][r]) * solver.Value(y[m][p])):
+                        print(f'({r},{m},{p})')
+                        s = solver.Value(x[r][m])
+                        for i in range(size_m):
+                            table_colors[r][s + i] = colors[col_index]
+                            cells[r][s + i] = f's{m}'
         ax.table(cellText=cells, loc='center', cellColours=table_colors)
         ax.set_title(filenames[index])
         plt.savefig('optimize_datacenter/results/' + filenames[index] + '.jpg')
-        plt.show()
+        if view:
+            plt.show()
 else:
     print('No solution found.')
