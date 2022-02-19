@@ -9,12 +9,12 @@ import numpy as np
 from joblib import Parallel, delayed
 import collections
 
-gcp_mode = False
+gcp_mode = True
 if not gcp_mode:
     import matplotlib.pyplot as plt
 
 filenames = ['example.in', 'dc.in']
-index = 0
+index = 1
 file_url = 'optimize_datacenter/data/' + filenames[index]
 # parse input
 file = open(file_url, 'r')
