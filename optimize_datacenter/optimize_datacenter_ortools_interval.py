@@ -202,6 +202,13 @@ def main():
         model.Add(y[imax][p] == 1)
         capacity_list[imax] = 0
 
+    # hints
+    for p in range(n_pools):
+        model.AddHint(gc[p], max_gc_capa_per_pool)
+        model.AddHint(capacity[p], max_capa_per_pool)
+        for r in range(n_rows):
+            model.AddHint(pool_row_capacity[p][r], max_capa_per_pool_per_row)
+
     """
     Model solve and display
     """
@@ -209,6 +216,9 @@ def main():
     variables_list = [x[r, m].presence for r in range(n_rows) for m in range(n_servers)]
     variables_list += [x[r, m].start for r in range(n_rows) for m in range(n_servers)]
     variables_list += [y[m][p] for p in range(n_pools) for m in range(n_servers)]
+    variables_list += [gc[p] for p in range(n_pools)]
+    variables_list += [pool_row_capacity[p][r] for p in range(n_pools) for r in range(n_rows)]
+    variables_list += [capacity[p] for p in range(n_pools)]
     solution_printer = VarArraySolutionPrinterWithLimit(variables_list, 5)
     solver = cp_model.CpSolver()
     # solver.parameters.enumerate_all_solutions = True
