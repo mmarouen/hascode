@@ -216,6 +216,12 @@ def main():
         for r in range(n_rows):
             model.AddHint(pool_row_capacity[p][r], max_capa_per_pool_per_row)
 
+    for r in range(n_rows):
+        servers_per_row = model.NewIntVar(1, n_servers, f'server_per_row[{r}]')
+        model.Add(servers_per_row == sum([x[r, m].presence for m in range(n_servers)]))
+        model.AddHint(servers_per_row, n_servers // n_rows)
+
+
     """
     Model solve and display
     """
