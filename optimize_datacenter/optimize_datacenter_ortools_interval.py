@@ -168,10 +168,11 @@ objective = model.NewIntVar(min_gc_per_pool, max_gc_capa_per_pool, 'minimum_gc')
 model.AddMinEquality(objective, gc)
 model.Maximize(objective)
 
-model.AddDecisionStrategy([x[r, m] for r in range(n_rows) for m in range(n_servers)], cp_model.CHOOSE_FIRST,
+print('formulate decision stragies')
+model.AddDecisionStrategy([x[r, m].start for r in range(n_rows) for m in range(n_servers)], cp_model.CHOOSE_FIRST,
                         cp_model.SELECT_MIN_VALUE)
-model.AddDecisionStrategy(y, cp_model.CHOOSE_FIRST,cp_model.SELECT_MIN_VALUE)
-model.AddDecisionStrategy(pool_row_capacity, cp_model.CHOOSE_FIRST,cp_model.SELECT_MAX_VALUE)
+model.AddDecisionStrategy([y[m][p] for m in range(n_servers) for p in range(n_pools)], cp_model.CHOOSE_FIRST,cp_model.SELECT_MIN_VALUE)
+model.AddDecisionStrategy([pool_row_capacity[p][r] for p in range(n_pools) for r in range(n_rows)], cp_model.CHOOSE_FIRST,cp_model.SELECT_MAX_VALUE)
 
 
 # symmetry break
