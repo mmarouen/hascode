@@ -129,10 +129,8 @@ for p in range(n_pools):
 #Constraints
 print('formulate C1')
 #C1
-#for r in range(n_rows):
-#    model.AddNoOverlap([x[r, m].interval for m in range(n_servers)])
-model.AddNoOverlap([x[0, m].interval for m in range(n_servers)])
-model.AddNoOverlap([x[1, m].interval for m in range(n_servers)])
+for r in range(n_rows):
+    model.AddNoOverlap([x[r, m].interval for m in range(n_servers)])
 
 print('formulate C2')
 #C2
