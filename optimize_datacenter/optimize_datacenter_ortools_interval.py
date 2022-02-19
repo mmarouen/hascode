@@ -169,10 +169,11 @@ model.AddMinEquality(objective, gc)
 model.Maximize(objective)
 
 print('formulate decision stragies')
-model.AddDecisionStrategy([x[r, m].start for r in range(n_rows) for m in range(n_servers)], cp_model.CHOOSE_FIRST,
-                        cp_model.SELECT_MIN_VALUE)
+for r in range(n_rows):
+    model.AddDecisionStrategy([x[r, m].start for m in range(n_servers)],
+                            cp_model.CHOOSE_FIRST, cp_model.SELECT_MIN_VALUE)
 model.AddDecisionStrategy([y[m][p] for m in range(n_servers) for p in range(n_pools)], cp_model.CHOOSE_FIRST,cp_model.SELECT_MIN_VALUE)
-model.AddDecisionStrategy([pool_row_capacity[p][r] for p in range(n_pools) for r in range(n_rows)], cp_model.CHOOSE_FIRST,cp_model.SELECT_MAX_VALUE)
+#model.AddDecisionStrategy([pool_row_capacity[p][r] for p in range(n_pools) for r in range(n_rows)], cp_model.CHOOSE_FIRST,cp_model.SELECT_MAX_VALUE)
 
 
 # symmetry break
