@@ -168,6 +168,12 @@ objective = model.NewIntVar(min_gc_per_pool, max_gc_capa_per_pool, 'minimum_gc')
 model.AddMinEquality(objective, gc)
 model.Maximize(objective)
 
+model.AddDecisionStrategy([x[r, m] for r in range(n_rows) for m in range(n_servers)], cp_model.CHOOSE_FIRST,
+                        cp_model.SELECT_MIN_VALUE)
+model.AddDecisionStrategy(y, cp_model.CHOOSE_FIRST,cp_model.SELECT_MIN_VALUE)
+model.AddDecisionStrategy(pool_row_capacity, cp_model.CHOOSE_FIRST,cp_model.SELECT_MAX_VALUE)
+
+
 # symmetry break
 capacity_list = [servers[m][1] for m in range(n_servers)]
 for p in range(n_pools):
@@ -183,6 +189,7 @@ solver = cp_model.CpSolver()
 solver.parameters.num_search_workers = 64
 solver.parameters.linearization_level = 2
 solver.parameters.search_branching = cp_model.FIXED_SEARCH
+
 now = time()
 status = solver.Solve(model)
 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
