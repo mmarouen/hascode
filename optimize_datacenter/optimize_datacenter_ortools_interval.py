@@ -13,7 +13,7 @@ if not gcp_mode:
     import matplotlib.pyplot as plt
 
 class VarArraySolutionPrinterWithLimit(cp_model.CpSolverSolutionCallback):
-  """Print intermediate solutions."""
+  """Print intermediate solutions + early breaking"""
 
   def __init__(self, variables, limit):
     cp_model.CpSolverSolutionCallback.__init__(self)
@@ -226,12 +226,7 @@ def main():
     Model solve and display
     """
     print('finished problem formulation\nSolving...')
-    #variables_list = [x[r, m].presence for r in range(n_rows) for m in range(n_servers)]
-    #variables_list += [x[r, m].start for r in range(n_rows) for m in range(n_servers)]
-    #variables_list += [y[m][p] for p in range(n_pools) for m in range(n_servers)]
     variables_list = [gc[p] for p in range(n_pools)]
-    #variables_list += [pool_row_capacity[p][r] for p in range(n_pools) for r in range(n_rows)]
-    #variables_list += [capacity[p] for p in range(n_pools)]
     solution_printer = VarArraySolutionPrinterWithLimit(variables_list, 5)
     solver = cp_model.CpSolver()
     # solver.parameters.enumerate_all_solutions = True
