@@ -1,3 +1,4 @@
+from numpy.lib.arraysetops import unique
 from ortools.sat.python import cp_model
 from time import time
 from tabulate import tabulate
@@ -62,8 +63,6 @@ def main():
     mean_capacity = total_capacity / n_servers
     min_size = min([servers[s][0] for s in range(n_servers)])
     max_size = max([servers[s][0] for s in range(n_servers)])
-    if len(unavailable) > 0:
-        unavailable_per_row = [sum([unavailable[u][0] == r for u in range(len(unavailable))]) for r in range(n_rows)]
     print(f'Problem setup for file {filenames[index]}:')
     print(f'Datacenter:\n-Rows {n_rows} x Slots {n_slots}\n-Unavailable slots {n_unavailable}')
     print(f'Pools {n_pools}, Servers {n_servers}')
@@ -71,6 +70,13 @@ def main():
     print(f'--Capacity: total capacity {total_capacity}, min capacity {min_capacity},\
     median capacity {median_capacity}, mean capacity {mean_capacity} max capacity {max_capacity}')
     print(f'--Size: min size {min_size}, max size {max_size}')
+    all_sizes = list(set([servers[m][0] for m in range(n_servers)]))
+    all_capacities = list(set([servers[m][1] for m in range(n_servers)]))
+    unique_servers = collections.defaultdict(list)
+    for s in all_sizes:
+        for c in all_capacities:
+            servers_list = [m for m in range(n_servers) if servers[m][0] == s and servers[m][1] == c]
+            unique_servers[s, c] = servers_list
 
     if not gcp_mode:
         print(f'Unavailable slots {unavailable}')
@@ -215,6 +221,23 @@ def main():
                 model.Add(size_m > size_m_).OnlyEnforceIf(sorted_.Not())
                 model.AddImplication(adjacent, sorted_)
 
+    print('formulate symmetry break S3')
+    # S3: use identical servers in order
+    for (s, c) in unique_servers.keys():
+        servers_list = unique_servers[s, c]
+        if len(servers_list) > 1:
+            for i in range(1, len(servers_list)):
+                used_server_current = model.NewBoolVar(f' ')
+                m = servers_list[i]
+                model.Add(sum([x[r, m].presence for r in range(n_rows)]) == 1).OnlyEnforceIf(used_server_current)
+                model.Add(sum([x[r, m].presence for r in range(n_rows)]) == 0).OnlyEnforceIf(used_server_current.Not())
+                used_server_prev = model.NewBoolVar(f' ')
+                m_ = servers_list[i - 1]
+                model.Add(sum([x[r, m_].presence for r in range(n_rows)]) == 1).OnlyEnforceIf(used_server_prev)
+                model.Add(sum([x[r, m_].presence for r in range(n_rows)]) == 0).OnlyEnforceIf(used_server_prev.Not())
+                model.AddImplication(used_server_current, used_server_prev)
+
+
     print('formulate hints')
     # hints
     for p in range(n_pools):
@@ -237,7 +260,7 @@ def main():
     """
     print('finished problem formulation\nSolving...')
     variables_list = [gc[p] for p in range(n_pools)]
-    solution_printer = VarArraySolutionPrinterWithLimit(variables_list, 5)
+    solution_printer = VarArraySolutionPrinterWithLimit(variables_list, 1)
     solver = cp_model.CpSolver()
     # solver.parameters.enumerate_all_solutions = True
     solver.parameters.num_search_workers = 64
