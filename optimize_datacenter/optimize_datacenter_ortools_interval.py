@@ -123,8 +123,8 @@ def main():
     min_capa_per_row_per_pool = int(0.9 * median_capacity)
     min_capacity_per_pool = int(min_capa_per_row_per_pool * n_rows)
     min_gc_per_pool = int(min_capa_per_row_per_pool * (n_rows - 1))
-    max_capa_per_pool = int(1.1 * total_capacity / n_pools)
-    max_capa_per_pool_per_row = int(1.1 * total_capacity / n_pools / n_rows)
+    max_capa_per_pool_per_row = int(1.5 * total_capacity / n_pools / n_rows)
+    max_capa_per_pool = int(max_capa_per_pool_per_row * n_rows)
     max_gc_capa_per_pool = int(max_capa_per_pool_per_row * (n_rows - 1))
     print(f'mini capa per pool per row {min_capa_per_row_per_pool}, max capa per pool {max_capa_per_pool}')
     for p in range(n_pools):
@@ -192,12 +192,30 @@ def main():
 
 
     # symmetry break
+    print('formulate symmetry break S1')
+    # S1: distribute biggest servers in size on pools
     capacity_list = [servers[m][1] for m in range(n_servers)]
     for p in range(n_pools):
         imax = np.argmax(capacity_list)
         model.Add(y[imax][p] == 1)
         capacity_list[imax] = 0
 
+    print('formulate symmetry break S2')
+    # S2: place adjacent servers by increasing size
+    for r in range(n_rows):
+        for m in range(n_servers):
+            size_m = servers[m][0]
+            for m_ in range(n_servers):
+                size_m_ = servers[m_][0]
+                adjacent = model.NewBoolVar(f'adjacent[{r}][{m}]')
+                model.Add(x[r, m_].start - x[r, m].start == size_m).OnlyEnforceIf(adjacent)
+                model.Add(x[r, m_].start - x[r, m].start != size_m).OnlyEnforceIf(adjacent.Not())
+                sorted_ = model.NewBoolVar(f'sorted[{r}][{m}]')
+                model.Add(size_m <= size_m_).OnlyEnforceIf(sorted_)
+                model.Add(size_m > size_m_).OnlyEnforceIf(sorted_.Not())
+                model.AddImplication(adjacent, sorted_)
+
+    print('formulate hints')
     # hints
     for p in range(n_pools):
         model.AddHint(gc[p], max_gc_capa_per_pool)
