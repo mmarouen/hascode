@@ -71,7 +71,9 @@ def main():
     median capacity {median_capacity}, mean capacity {mean_capacity} max capacity {max_capacity}')
     print(f'--Size: min size {min_size}, max size {max_size}')
     all_sizes = list(set([servers[m][0] for m in range(n_servers)]))
+    all_sizes.sort()
     all_capacities = list(set([servers[m][1] for m in range(n_servers)]))
+    all_capacities.sort()
     unique_servers = collections.defaultdict(list)
     for s in all_sizes:
         for c in all_capacities:
@@ -208,18 +210,37 @@ def main():
 
     print('formulate symmetry break S2')
     # S2: place adjacent servers by increasing size
+    sizes = np.asarray([servers[m][0] for m in range(n_servers)])
+    sort_index = np.argsort(sizes)
     for r in range(n_rows):
-        for m in range(n_servers):
-            size_m = servers[m][0]
-            for m_ in range(n_servers):
-                size_m_ = servers[m_][0]
-                adjacent = model.NewBoolVar(f'adjacent[{r}][{m}]')
-                model.Add(x[r, m_].start - x[r, m].start == size_m).OnlyEnforceIf(adjacent)
-                model.Add(x[r, m_].start - x[r, m].start != size_m).OnlyEnforceIf(adjacent.Not())
-                sorted_ = model.NewBoolVar(f'sorted[{r}][{m}]')
-                model.Add(size_m <= size_m_).OnlyEnforceIf(sorted_)
-                model.Add(size_m > size_m_).OnlyEnforceIf(sorted_.Not())
-                model.AddImplication(adjacent, sorted_)
+        for i in range(1, len(sort_index)):
+            size_m = sizes[i]
+            m = sort_index[i]
+            for j in range(i):
+                size_m_ = sizes[j]
+                m_ = sort_index[j]
+                adjacent = model.NewBoolVar('adjacent')
+                abs_val = model.NewIntVar(0, n_slots, 'abs_val')
+                diff_val = model.NewIntVar(-n_slots, n_slots, 'diff_val')
+                model.Add(diff_val == x[r, m].start - x[r, m_].start)
+                model.AddAbsEquality(abs_val, diff_val)
+                model.Add(abs_val == size_m_).OnlyEnforceIf(adjacent)
+                model.Add(abs_val != size_m_).OnlyEnforceIf(adjacent.Not())
+                model.Add(x[r, m_].start < x[r, m].start).OnlyEnforceIf(adjacent)
+                #model.Add(x[r, m_].start >= x[r, m].start).OnlyEnforceIf(adjacent.Not())
+    """
+    for m in range(n_servers):
+        size_m = servers[m][0]
+        for m_ in range(n_servers):
+            size_m_ = servers[m_][0]
+            adjacent = model.NewBoolVar(f'adjacent[{r}][{m}]')
+            model.Add(x[r, m_].start - x[r, m].start == size_m).OnlyEnforceIf(adjacent)
+            model.Add(x[r, m_].start - x[r, m].start != size_m).OnlyEnforceIf(adjacent.Not())
+            sorted_ = model.NewBoolVar(f'sorted[{r}][{m}]')
+            model.Add(size_m <= size_m_).OnlyEnforceIf(sorted_)
+            model.Add(size_m > size_m_).OnlyEnforceIf(sorted_.Not())
+            model.AddImplication(adjacent, sorted_)
+    """
 
     print('formulate symmetry break S3')
     # S3: use identical servers in order
