@@ -1,7 +1,3 @@
-from numpy.core.fromnumeric import shape, size
-from numpy.core.function_base import add_newdoc
-from numpy.core.shape_base import block
-from numpy.lib.type_check import _nan_to_num_dispatcher
 from ortools.sat.python import cp_model
 from time import time
 from tabulate import tabulate
@@ -59,8 +55,6 @@ def main():
             servers.append((values[0], values[1]))
     file.close()
 
-    # n_pools = 1
-
     total_capacity = sum([servers[s][1] for s in range(n_servers)])
     min_capacity = min([servers[s][1] for s in range(n_servers)])
     max_capacity = max([servers[s][1] for s in range(n_servers)])
@@ -101,7 +95,8 @@ def main():
     x = {}
     for r in range(n_rows):
         for m in range(n_servers):
-            slot_index = model.NewIntVar(0, n_slots, f'start[{r}][{m}]')
+            size_m = servers[m][0]
+            slot_index = model.NewIntVar(0, n_slots - size_m, f'start[{r}][{m}]')
             end_index = model.NewIntVar(0, n_slots, f'end[{r}][{m}]')
             presence_var = model.NewBoolVar(f'presence[{r}][{m}]')
             interval_var = model.NewOptionalIntervalVar(slot_index, servers[m][0], end_index, presence_var, f'interval[{r}][{m}]')
@@ -124,11 +119,12 @@ def main():
     capacity = []
     pool_row_capacity = []
     # min_capa_per_row_per_pool = min_capacity
-    min_capa_per_row_per_pool = int(0.5 * (median_capacity + min_capacity))
+    # min_capa_per_row_per_pool = int(0.5 * (median_capacity + min_capacity))
+    min_capa_per_row_per_pool = int(0.9 * median_capacity)
     min_capacity_per_pool = int(min_capa_per_row_per_pool * n_rows)
     min_gc_per_pool = int(min_capa_per_row_per_pool * (n_rows - 1))
-    max_capa_per_pool = int(1.5 * total_capacity / n_pools)
-    max_capa_per_pool_per_row = int(1.5 * total_capacity / n_pools / n_rows)
+    max_capa_per_pool = int(1.1 * total_capacity / n_pools)
+    max_capa_per_pool_per_row = int(1.1 * total_capacity / n_pools / n_rows)
     max_gc_capa_per_pool = int(max_capa_per_pool_per_row * (n_rows - 1))
     print(f'mini capa per pool per row {min_capa_per_row_per_pool}, max capa per pool {max_capa_per_pool}')
     for p in range(n_pools):
@@ -167,11 +163,6 @@ def main():
 
     print('formulate C3')
     #C3
-    #for m in range(n_servers):
-    #    size_m = servers[m][0]
-    #    for r in range(n_rows):
-    #        for i in range(size_m - 1):
-    #            model.Add(x[r, m].start != n_slots - 1 - i)
 
     print('formulate C4')
     #C4
@@ -190,13 +181,14 @@ def main():
     model.Maximize(objective)
 
     print('formulate decision strategies')
-    for r in range(n_rows):
-        model.AddDecisionStrategy([x[r, m].start for m in range(n_servers)],
-                                cp_model.CHOOSE_FIRST, cp_model.SELECT_MIN_VALUE)
-    model.AddDecisionStrategy([y[m][p] for m in range(n_servers) for p in range(n_pools)],
-                             cp_model.CHOOSE_FIRST, cp_model.SELECT_MIN_VALUE)
-    model.AddDecisionStrategy([pool_row_capacity[p][r] for p in range(n_pools) for r in range(n_rows)],
-                             cp_model.CHOOSE_FIRST, cp_model.SELECT_MAX_VALUE)
+    #for r in range(n_rows):
+    #    model.AddDecisionStrategy([x[r, m].start for m in range(n_servers)],
+    #                            cp_model.CHOOSE_FIRST, cp_model.SELECT_MIN_VALUE)
+    #model.AddDecisionStrategy([y[m][p] for m in range(n_servers) for p in range(n_pools)],
+    #                         cp_model.CHOOSE_FIRST, cp_model.SELECT_MIN_VALUE)
+    #for p in range(n_pools):
+    #    for r in range(n_rows):
+    #        model.AddDecisionStrategy([pool_row_capacity[p][r]], cp_model.CHOOSE_FIRST, cp_model.SELECT_MAX_VALUE)
 
 
     # symmetry break
