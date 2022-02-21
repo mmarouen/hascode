@@ -235,7 +235,7 @@ def main():
                 model.AddImplication(used_server_current2, used_server_prev2)
 
     print('formule symmetry break S3')
-    # S3: assign values to pool once the previous one was started
+    # S3: assign values to pools going in increasing order
     started_previous_pool = []
     for p in range(1, n_pools):
         started_previous_pool.append(model.NewBoolVar(f'started_prev_pool[{p}]'))
@@ -246,7 +246,7 @@ def main():
         model.Add(started_previous_pool[p - 1] == 1)
 
     print('formulate symmetry break S4')
-    # S4: assign values to rows once the previous one was started
+    # S4: assign values to rows top -> down
     started_previous_row = []
     for r in range(1, n_rows):
         started_previous_row.append(model.NewBoolVar(f'started_row[{r}]'))
@@ -255,6 +255,17 @@ def main():
         model.Add(sum([x[r - 1, m].presence for m in range(n_servers)]) < sum([x[r, m].presence for m in range(n_servers)])).\
                         OnlyEnforceIf(started_previous_row[r - 1].Not())
         model.Add(started_previous_row[r - 1] == 1)
+
+    print('formulate symmetry break S4')
+    # S5: assign servers having identical sizes in decreasing order of capacity
+    for r in range(n_rows):
+        for s in unique_servers.keys():
+            servers_list = unique_servers[s]
+            if len(servers_list) > 1:
+                for i in range(1, len(servers_list)):
+                    m = servers_list[i]
+                    m_ = servers_list[i - 1]
+                    model.Add(x[r, m].start >= x[r, m_].start)
     
     print('formulate hints')
     # hints
