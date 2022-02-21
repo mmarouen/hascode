@@ -228,25 +228,25 @@ def main():
 
     print('formule symmetry break S3')
     # S3: assign values to pool once the previous one was started
+    started_previous_pool = []
     for p in range(1, n_pools):
-        started_previous_pool = model.NewBoolVar(f'started_prev_pool[{p}]')
-        model.Add(sum([y[m][p - 1] for m in range(n_servers)]) > 0).OnlyEnforceIf(started_previous_pool)
-        model.Add(sum([y[m][p - 1] for m in range(n_servers)]) == 0).OnlyEnforceIf(started_previous_pool.Not())
-        started_current_pool = model.NewBoolVar(f'started_curr_pool[{p}]')
-        model.Add(sum([y[m][p] for m in range(n_servers)]) > 0).OnlyEnforceIf(started_current_pool)
-        model.Add(sum([y[m][p] for m in range(n_servers)]) == 0).OnlyEnforceIf(started_current_pool.Not())
-        model.AddImplication(started_current_pool, started_previous_pool)
+        started_previous_pool.append(model.NewBoolVar(f'started_prev_pool[{p}]'))
+        model.Add(sum([y[m][p - 1] for m in range(n_servers)]) >= sum([y[m][p] for m in range(n_servers)])).\
+                 OnlyEnforceIf(started_previous_pool[p - 1])
+        model.Add(sum([y[m][p - 1] for m in range(n_servers)]) < sum([y[m][p] for m in range(n_servers)])).\
+                 OnlyEnforceIf(started_previous_pool[p - 1].Not())
+        model.Add(started_previous_pool[p - 1] == 1)
 
     print('formulate symmetry break S4')
     # S4: assign values to rows once the previous one was started
+    started_previous_row = []
     for r in range(1, n_rows):
-        started_previous_row = model.NewBoolVar(f'started_row[{r}]')
-        model.Add(sum([x[r - 1, m].presence for m in range(n_servers)]) > 0).OnlyEnforceIf(started_previous_row)
-        model.Add(sum([x[r - 1, m].presence for m in range(n_servers)]) == 0).OnlyEnforceIf(started_previous_row.Not())
-        started_current_row = model.NewBoolVar(f'started_current_row[{r}]')
-        model.Add(sum([x[r, m].presence for m in range(n_servers)]) > 0).OnlyEnforceIf(started_current_row)
-        model.Add(sum([x[r, m].presence for m in range(n_servers)]) == 0).OnlyEnforceIf(started_current_row.Not())
-        model.AddImplication(started_current_row, started_previous_row)
+        started_previous_row.append(model.NewBoolVar(f'started_row[{r}]'))
+        model.Add(sum([x[r - 1, m].presence for m in range(n_servers)]) >= sum([x[r, m].presence for m in range(n_servers)])).\
+                        OnlyEnforceIf(started_previous_row[r - 1])
+        model.Add(sum([x[r - 1, m].presence for m in range(n_servers)]) < sum([x[r, m].presence for m in range(n_servers)])).\
+                        OnlyEnforceIf(started_previous_row[r - 1].Not())
+        model.Add(started_previous_row[r - 1] == 1)
     
     print('formulate hints')
     # hints
