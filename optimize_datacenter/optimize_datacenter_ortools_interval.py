@@ -72,14 +72,13 @@ def main():
     print(f'--Size: min size {min_size}, max size {max_size}')
     all_sizes = list(set([servers[m][0] for m in range(n_servers)]))
     all_sizes.sort()
-    all_capacities = list(set([servers[m][1] for m in range(n_servers)]))
-    all_capacities.sort()
     unique_servers = collections.defaultdict(list)
     for s in all_sizes:
-        for c in all_capacities:
-            servers_list = [m for m in range(n_servers) if servers[m][0] == s and servers[m][1] == c]
-            unique_servers[s, c] = servers_list
-
+        servers_list = [m for m in range(n_servers) if servers[m][0] == s]
+        relevant_capacities = [servers[m][1] for m in servers_list]
+        servers_idxs = np.argsort(-np.asarray(relevant_capacities))
+        servers_list_sorted = [servers_list[idx] for idx in servers_idxs]
+        unique_servers[s] = servers_list_sorted
     if not gcp_mode:
         print(f'Unavailable slots {unavailable}')
         print(f'Servers: {servers}')
@@ -122,6 +121,7 @@ def main():
     capacity_p: total pool capacity
     pool_row_capacity_p,r: remaining capacity in pool 'p' after row 'r' drops
     gc_p:guaranteed capacity for each pool
+    precedence_r,m: which server preceeds
     """
 
     capacity = []
@@ -208,44 +208,10 @@ def main():
         model.Add(y[imax][p] == 1)
         capacity_list[imax] = 0
 
-    print('formulate symmetry break S2')
-    # S2: place adjacent servers by increasing size
-    sizes = np.asarray([servers[m][0] for m in range(n_servers)])
-    sort_index = np.argsort(sizes)
-    for r in range(n_rows):
-        for i in range(1, len(sort_index)):
-            size_m = sizes[i]
-            m = sort_index[i]
-            for j in range(i):
-                size_m_ = sizes[j]
-                m_ = sort_index[j]
-                adjacent = model.NewBoolVar('adjacent')
-                abs_val = model.NewIntVar(0, n_slots, 'abs_val')
-                diff_val = model.NewIntVar(-n_slots, n_slots, 'diff_val')
-                model.Add(diff_val == x[r, m].start - x[r, m_].start)
-                model.AddAbsEquality(abs_val, diff_val)
-                model.Add(abs_val == size_m_).OnlyEnforceIf(adjacent)
-                model.Add(abs_val != size_m_).OnlyEnforceIf(adjacent.Not())
-                model.Add(x[r, m_].start < x[r, m].start).OnlyEnforceIf(adjacent)
-                #model.Add(x[r, m_].start >= x[r, m].start).OnlyEnforceIf(adjacent.Not())
-    """
-    for m in range(n_servers):
-        size_m = servers[m][0]
-        for m_ in range(n_servers):
-            size_m_ = servers[m_][0]
-            adjacent = model.NewBoolVar(f'adjacent[{r}][{m}]')
-            model.Add(x[r, m_].start - x[r, m].start == size_m).OnlyEnforceIf(adjacent)
-            model.Add(x[r, m_].start - x[r, m].start != size_m).OnlyEnforceIf(adjacent.Not())
-            sorted_ = model.NewBoolVar(f'sorted[{r}][{m}]')
-            model.Add(size_m <= size_m_).OnlyEnforceIf(sorted_)
-            model.Add(size_m > size_m_).OnlyEnforceIf(sorted_.Not())
-            model.AddImplication(adjacent, sorted_)
-    """
-
     print('formulate symmetry break S3')
-    # S3: use identical servers in order
-    for (s, c) in unique_servers.keys():
-        servers_list = unique_servers[s, c]
+    # S3: use identical servers in order, force placing servers by increasing capacity size first
+    for s in unique_servers.keys():
+        servers_list = unique_servers[s]
         if len(servers_list) > 1:
             for i in range(1, len(servers_list)):
                 used_server_current = model.NewBoolVar(f' ')
