@@ -34,7 +34,9 @@ class VarArraySolutionPrinterWithLimit(cp_model.CpSolverSolutionCallback):
 
 def main():
     filenames = ['example.in', 'dc.in']
-    index = 1
+    index = 0
+    if gcp_mode:
+        index = 1
     file_url = 'optimize_datacenter/data/' + filenames[index]
     # parse input
     file = open(file_url, 'r')
@@ -208,8 +210,8 @@ def main():
         model.Add(y[imax][p] == 1)
         capacity_list[imax] = 0
 
-    print('formulate symmetry break S3')
-    # S3: use identical servers in order, force placing servers by increasing capacity size first
+    print('formulate symmetry break S2')
+    # S2: use identical servers in order, force placing servers by increasing capacity size first
     for s in unique_servers.keys():
         servers_list = unique_servers[s]
         if len(servers_list) > 1:
@@ -224,7 +226,28 @@ def main():
                 model.Add(sum([x[r, m_].presence for r in range(n_rows)]) == 0).OnlyEnforceIf(used_server_prev.Not())
                 model.AddImplication(used_server_current, used_server_prev)
 
+    print('formule symmetry break S3')
+    # S3: assign values to pool once the previous one was started
+    for p in range(1, n_pools):
+        started_previous_pool = model.NewBoolVar(f'started_prev_pool[{p}]')
+        model.Add(sum([y[m][p - 1] for m in range(n_servers)]) > 0).OnlyEnforceIf(started_previous_pool)
+        model.Add(sum([y[m][p - 1] for m in range(n_servers)]) == 0).OnlyEnforceIf(started_previous_pool.Not())
+        started_current_pool = model.NewBoolVar(f'started_curr_pool[{p}]')
+        model.Add(sum([y[m][p] for m in range(n_servers)]) > 0).OnlyEnforceIf(started_current_pool)
+        model.Add(sum([y[m][p] for m in range(n_servers)]) == 0).OnlyEnforceIf(started_current_pool.Not())
+        model.AddImplication(started_current_pool, started_previous_pool)
 
+    print('formulate symmetry break S4')
+    # S4: assign values to rows once the previous one was started
+    for r in range(1, n_rows):
+        started_previous_row = model.NewBoolVar(f'started_row[{r}]')
+        model.Add(sum([x[r - 1, m].presence for m in range(n_servers)]) > 0).OnlyEnforceIf(started_previous_row)
+        model.Add(sum([x[r - 1, m].presence for m in range(n_servers)]) == 0).OnlyEnforceIf(started_previous_row.Not())
+        started_current_row = model.NewBoolVar(f'started_current_row[{r}]')
+        model.Add(sum([x[r, m].presence for m in range(n_servers)]) > 0).OnlyEnforceIf(started_current_row)
+        model.Add(sum([x[r, m].presence for m in range(n_servers)]) == 0).OnlyEnforceIf(started_current_row.Not())
+        model.AddImplication(started_current_row, started_previous_row)
+    
     print('formulate hints')
     # hints
     for p in range(n_pools):
