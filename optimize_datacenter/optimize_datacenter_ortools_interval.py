@@ -218,13 +218,21 @@ def main():
             for i in range(1, len(servers_list)):
                 used_server_current = model.NewBoolVar(f' ')
                 m = servers_list[i]
+                m_ = servers_list[i - 1]
                 model.Add(sum([x[r, m].presence for r in range(n_rows)]) == 1).OnlyEnforceIf(used_server_current)
                 model.Add(sum([x[r, m].presence for r in range(n_rows)]) == 0).OnlyEnforceIf(used_server_current.Not())
                 used_server_prev = model.NewBoolVar(f' ')
-                m_ = servers_list[i - 1]
                 model.Add(sum([x[r, m_].presence for r in range(n_rows)]) == 1).OnlyEnforceIf(used_server_prev)
                 model.Add(sum([x[r, m_].presence for r in range(n_rows)]) == 0).OnlyEnforceIf(used_server_prev.Not())
                 model.AddImplication(used_server_current, used_server_prev)
+
+                used_server_current2 = model.NewBoolVar(f' ')
+                model.Add(sum([y[m][p] for p in range(n_pools)]) == 1).OnlyEnforceIf(used_server_current2)
+                model.Add(sum([y[m][p] for p in range(n_pools)]) == 0).OnlyEnforceIf(used_server_current2.Not())
+                used_server_prev2 = model.NewBoolVar(f' ')
+                model.Add(sum([y[m_][p] for p in range(n_pools)]) == 1).OnlyEnforceIf(used_server_prev2)
+                model.Add(sum([y[m_][p] for p in range(n_pools)]) == 0).OnlyEnforceIf(used_server_prev2.Not())
+                model.AddImplication(used_server_current2, used_server_prev2)
 
     print('formule symmetry break S3')
     # S3: assign values to pool once the previous one was started
