@@ -1,3 +1,4 @@
+from numpy.core.fromnumeric import size
 from numpy.lib.arraysetops import unique
 from ortools.sat.python import cp_model
 from time import time
@@ -256,7 +257,7 @@ def main():
                         OnlyEnforceIf(started_previous_row[r - 1].Not())
         model.Add(started_previous_row[r - 1] == 1)
 
-    print('formulate symmetry break S4')
+    print('formulate symmetry break S5')
     # S5: assign servers having identical sizes in decreasing order of capacity
     for r in range(n_rows):
         for s in unique_servers.keys():
@@ -266,7 +267,27 @@ def main():
                     m = servers_list[i]
                     m_ = servers_list[i - 1]
                     model.Add(x[r, m].start >= x[r, m_].start)
-    
+
+    print('formulate symmetry break S6')
+    # S6: sort adjacent servers by increasing size
+    sizes = np.asarray([servers[m][0] for m in range(n_servers)])
+    sort_index = np.argsort(sizes)
+    for r in range(n_rows):
+        for m in range(1, len(sort_index)):
+            size_m = servers[m][0]
+            for m_ in range(i):
+                size_m_ = servers[m_][0]
+                if size_m == size_m_:
+                    continue
+                adjacent = model.NewBoolVar('adjacent')
+                abs_val = model.NewIntVar(0, n_slots, 'abs_val')
+                diff_val = model.NewIntVar(-n_slots, n_slots, 'diff_val')
+                model.Add(diff_val == x[r, m].start - x[r, m_].start)
+                model.AddAbsEquality(abs_val, diff_val)
+                model.Add(abs_val == size_m_).OnlyEnforceIf(adjacent)
+                model.Add(abs_val != size_m_).OnlyEnforceIf(adjacent.Not())
+                model.Add(x[r, m_].start < x[r, m].start).OnlyEnforceIf(adjacent)
+                #model.Add(x[r, m_].start >= x[r, m].start).OnlyEnforceIf(adjacent.Not())    
     print('formulate hints')
     # hints
     for p in range(n_pools):
