@@ -205,22 +205,26 @@ def main():
     # symmetry break
     print('formulate symmetry break S1')
     # S1: distribute biggest servers in size on pools
+    """
     capacity_list = [servers[m][1] for m in range(n_servers)]
     for p in range(n_pools):
         imax = np.argmax(capacity_list)
         model.Add(y[imax][p] == 1)
         model.Add(x[p % n_rows, imax].presence == 1)
         capacity_list[imax] = 0
-
+    """
 
     print('formulate symmetry break S2')
-    # S2: use identical servers in order, force placing servers by increasing capacity size first
+    # S2: use identical sized servers in order:place by increasing capacity
     for s in unique_servers.keys():
         servers_list = unique_servers[s]
         if len(servers_list) > 1:
-            for i in range(1, len(servers_list)):
-                used_server_current = model.NewBoolVar(f' ')
+            for i in range(len(servers_list)):
                 m = servers_list[i]
+                model.AddHint(x[m % n_rows, m].presence, 1)
+                model.AddHint(y[m][m % n_pools], 1)
+                """
+                used_server_current = model.NewBoolVar(f' ')
                 m_ = servers_list[i - 1]
                 model.Add(sum([x[r, m].presence for r in range(n_rows)]) == 1).OnlyEnforceIf(used_server_current)
                 model.Add(sum([x[r, m].presence for r in range(n_rows)]) == 0).OnlyEnforceIf(used_server_current.Not())
@@ -236,7 +240,8 @@ def main():
                 model.Add(sum([y[m_][p] for p in range(n_pools)]) == 1).OnlyEnforceIf(used_server_prev2)
                 model.Add(sum([y[m_][p] for p in range(n_pools)]) == 0).OnlyEnforceIf(used_server_prev2.Not())
                 model.AddImplication(used_server_current2, used_server_prev2)
-
+                """
+    """
     print('formule symmetry break S3')
     # S3: assign values to pools going in increasing order
     started_previous_pool = []
@@ -258,7 +263,7 @@ def main():
         model.Add(sum([x[r - 1, m].presence for m in range(n_servers)]) < sum([x[r, m].presence for m in range(n_servers)])).\
                         OnlyEnforceIf(started_previous_row[r - 1].Not())
         model.Add(started_previous_row[r - 1] == 1)
-
+    """
     print('formulate symmetry break S5')
     # S5: assign servers having identical sizes in decreasing order of capacity
     for r in range(n_rows):
@@ -269,7 +274,7 @@ def main():
                     m = servers_list[i]
                     m_ = servers_list[i - 1]
                     model.Add(x[r, m].start >= x[r, m_].start)
-
+    """
     print('formulate symmetry break S6')
     # S6: sort adjacent servers by increasing size
     sizes = np.asarray([servers[m][0] for m in range(n_servers)])
@@ -307,7 +312,7 @@ def main():
                 model.Add(x[r, m_].start >= x[r, m].start).OnlyEnforceIf(precedence.Not())
                 #model.AddImplication(precedence, adjacent)
                 model.AddImplication(adjacent, precedence)
-
+    """
     print('formulate hints')
     # hints
     for p in range(n_pools):
