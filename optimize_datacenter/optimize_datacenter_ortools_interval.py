@@ -209,7 +209,9 @@ def main():
     for p in range(n_pools):
         imax = np.argmax(capacity_list)
         model.Add(y[imax][p] == 1)
+        model.Add(x[p % n_rows, imax].presence == 1)
         capacity_list[imax] = 0
+
 
     print('formulate symmetry break S2')
     # S2: use identical servers in order, force placing servers by increasing capacity size first
@@ -273,21 +275,39 @@ def main():
     sizes = np.asarray([servers[m][0] for m in range(n_servers)])
     sort_index = np.argsort(sizes)
     for r in range(n_rows):
-        for m in range(1, len(sort_index)):
+        for m in range(n_servers):
+        #for i in range(1, len(sort_index)):
+            #m = sort_index[i]
             size_m = servers[m][0]
-            for m_ in range(i):
-                size_m_ = servers[m_][0]
-                if size_m == size_m_:
+            for m_ in range(n_servers):
+            #for j in range(i):
+                #j = sort_index[j]
+                if m == m_:
                     continue
-                adjacent = model.NewBoolVar('adjacent')
+                size_m_ = servers[m_][0]
+                #if size_m == size_m_:
+                #    continue
+                if size_m_ >= size_m:
+                    continue
                 abs_val = model.NewIntVar(0, n_slots, 'abs_val')
                 diff_val = model.NewIntVar(-n_slots, n_slots, 'diff_val')
                 model.Add(diff_val == x[r, m].start - x[r, m_].start)
                 model.AddAbsEquality(abs_val, diff_val)
-                model.Add(abs_val == size_m_).OnlyEnforceIf(adjacent)
-                model.Add(abs_val != size_m_).OnlyEnforceIf(adjacent.Not())
-                model.Add(x[r, m_].start < x[r, m].start).OnlyEnforceIf(adjacent)
-                #model.Add(x[r, m_].start >= x[r, m].start).OnlyEnforceIf(adjacent.Not())    
+                adjacent1 = model.NewBoolVar('adjacent')
+                model.Add(abs_val == size_m_).OnlyEnforceIf(adjacent1)
+                model.Add(abs_val != size_m_).OnlyEnforceIf(adjacent1.Not())
+                adjacent2 = model.NewBoolVar('adjacent')
+                model.Add(abs_val == size_m).OnlyEnforceIf(adjacent2)
+                model.Add(abs_val != size_m).OnlyEnforceIf(adjacent2.Not())
+                adjacent = model.NewBoolVar('adjacent')
+                model.AddBoolOr([adjacent1, adjacent2]).OnlyEnforceIf(adjacent)
+                model.AddBoolAnd([adjacent1.Not(), adjacent2.Not()]).OnlyEnforceIf(adjacent.Not())
+                precedence = model.NewBoolVar('precedence')
+                model.Add(x[r, m_].start < x[r, m].start).OnlyEnforceIf(precedence)
+                model.Add(x[r, m_].start >= x[r, m].start).OnlyEnforceIf(precedence.Not())
+                #model.AddImplication(precedence, adjacent)
+                model.AddImplication(adjacent, precedence)
+
     print('formulate hints')
     # hints
     for p in range(n_pools):
@@ -315,7 +335,7 @@ def main():
     # solver.parameters.enumerate_all_solutions = True
     solver.parameters.num_search_workers = 64
     solver.parameters.linearization_level = 1
-    solver.parameters.search_branching = cp_model.PORTFOLIO_SEARCH
+    solver.parameters.search_branching = cp_model.FIXED_SEARCH
 
     now = time()
     status = solver.Solve(model, solution_printer)
