@@ -130,11 +130,14 @@ def main():
         x[i] = project_allocation(start=slot_index, end=end_index, presence=presence_var, interval=interval_var, score=p_score)
     
     y = {} # resources allocation: is resouce j assigned to project i
+    resource_allocation = collections.namedtuple('resource_allocation', 'start end presence interval')
     for i, p in enumerate(projects.keys()):
         p_duration = projects[p][0]
         for j , c in enumerate(contributors.keys()):
             presence_var = model.NewBoolVar(f'allocation[{i}, {j}]')
-            y[i, j] = model.NewOptionalIntervalVar(x[i].start, p_duration, x[i].end, presence_var, f'assigned[{i},{j}]')
+            interval = model.NewOptionalIntervalVar(x[i].start, p_duration, x[i].end, presence_var, f'assigned[{i},{j}]')
+            y[i, j] = resource_allocation(start=x[i].start, end=end_index, presence=presence_var, interval=interval)
+
 
     """
     cost
@@ -172,7 +175,7 @@ def main():
 
     # C2: if assigned to project p, each contributor can only work on it within project interval
     for j , c in enumerate(contributors.keys()):
-        model.AddNoOverlap(y[i, j] for i, _ in enumerate(projects.keys()))
+        model.AddNoOverlap(y[i, j].interval for i, _ in enumerate(projects.keys()))
 
     # C3: update skills matrix if project is finished
 
@@ -195,6 +198,7 @@ def main():
         print(f'total runtime {int(time() - now)}s')
         print("Solutions found!")
         print(f'Optimal total value: {solver.ObjectiveValue()}.')
+        print(solver.Value(y[0,0].is_present))
     else:
         print('No solution found.')
 if __name__ == '__main__':
