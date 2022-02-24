@@ -82,6 +82,7 @@ def main():
                     line_index += 1
                 projects[p_name].append(project_roles_list)
             break
+    n_days = sum([projects[p][0] for p in projects.keys()]) + 1
     unique_skills = []
     for c in contributors.keys():
         if len(contributors[c]) > 1:
@@ -139,6 +140,7 @@ def main():
     cost
     """
     total_scores = model.NewIntVar(1, max_scores, 'total_score')
+    for 
     model.Add(total_scores == sum([x[p].presence * x[p].score for p in range(len(projects.keys()))]))
     model.Maximize(total_scores)
 
@@ -151,17 +153,9 @@ def main():
     best_skills = np.max(skills_matrix, 0)
     for i, p in enumerate(projects.keys()):
         is_doable = model.NewBoolVar(f'is_doable_{i}')
-        is_doable_default = int(np.all(best_skills - project_matrix[i, :] >= 0))
-        project_skills = np.where(project_matrix[i, :] > 0)[0]
-        project_skills_level = [project_matrix[i, l] for l in project_skills]
-        juniors = []
-        for s in enumerate(project_skills):
-            for j, c in enumerate(contributors.keys()):
-                skill_id = project_skills[s]
-                junior_id = np.where(skills_matrix[j, :] - project_matrix[i, skill_id] == -1)[0]
-                if(len(junior_id) == 0):
-                    
-
+        val = int(np.all(best_skills - project_matrix[i, :] >= 0))
+        print(f'project {i}: doable? {val}, score {projects[p][1]}')
+        model.Add(is_doable == val)
         model.AddImplication(x[i].presence, is_doable)
 
     # C2: if assigned to project p, each contributor can only work on it within project interval
