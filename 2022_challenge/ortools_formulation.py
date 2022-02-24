@@ -46,6 +46,7 @@ def main():
     contributors = collections.defaultdict(list)
     projects = collections.defaultdict(list)
     line_index = 0
+    n_days = 100
     for l, line in enumerate(lines):
         line = line.rstrip('\r\n')
         print(l)
@@ -91,6 +92,7 @@ def main():
         unique_skills.append(skills)
     unique_skills = [item for sublist in unique_skills for item in sublist]
     unique_skills = list(set(unique_skills))
+
     skills_matrix = np.zeros((n_contributors, len(unique_skills)))
     for i, c in enumerate(contributors.keys()):
         for j, s in enumerate(unique_skills):
@@ -99,10 +101,39 @@ def main():
             if len(loc[0]) > 0:
                 skills_matrix[i, j] = contributors[c][loc[0][0] + 1][1]
     print(skills_matrix)
+
+    project_matrix = np.zeros((n_projects, len(unique_skills)))
+    for i, p in enumerate(projects.keys()):
+        print(f'project {p}: {projects[p]}')
+        for j, s in enumerate(unique_skills):
+            project_list_p = [s[0] for s in projects[p][4:][0]]
+            print(f'skill {s}, project skills: {project_list_p}')
+            loc = np.where(np.asarray(project_list_p) == s)
+            if len(loc[0]) > 0:
+                print(loc[0][0])
+                print(projects[p][4])
+                project_matrix[i, j] = projects[p][4][loc[0][0]][1]
+    print(project_matrix)
+    
+    model = cp_model.CpModel()
+    project_allocation = collections.namedtuple('project_allocation', 'start end presence interval score')
+    x = {}
+    for i, p in enumerate(projects.keys):
+        p_duration = projects[p][0]
+        p_score = projects[p][1]
+        slot_index = model.NewIntVar(0, n_days - p_duration, f'start[{p}]')
+        end_index = model.NewIntVar(0, n_days, f'end[{p}]')
+        presence_var = model.NewBoolVar(f'presence[{p}]')
+        interval_var = model.NewOptionalIntervalVar(slot_index, p_duration, end_index, presence_var, f'interval[{p}]')
+        x[p] = project_allocation(start=slot_index, end=end_index, presence=presence_var, interval=interval_var, score=p_score)
+
+    """
+    cost
+    """
+
     """
     Model solve and display
     """
-    print('finished problem formulation\nSolving...')
     """    #variables_list = [gc[p] for p in range(n_pools)]
     solution_printer = VarArraySolutionPrinterWithLimit(variables_list, 1)
     solver = cp_model.CpSolver()
