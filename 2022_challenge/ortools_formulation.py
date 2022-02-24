@@ -92,7 +92,7 @@ def main():
     skills_matrix = np.zeros((n_contributors, len(unique_skills)))
     for i, c in enumerate(contributors.keys()):
         for j, s in enumerate(unique_skills):
-            skill_list_c = [s[0] for s in contributors[c][1:]]
+            skill_list_c = [s_[0] for s_ in contributors[c][1:]]
             loc = np.where(np.asarray(skill_list_c) == s)
             if len(loc[0]) > 0:
                 skills_matrix[i, j] = contributors[c][loc[0][0] + 1][1]
@@ -100,7 +100,7 @@ def main():
     project_matrix = np.zeros((n_projects, len(unique_skills)))
     for i, p in enumerate(projects.keys()):
         for j, s in enumerate(unique_skills):
-            project_list_p = [s[0] for s in projects[p][4:][0]]
+            project_list_p = [s_[0] for s_ in projects[p][4:][0]]
             loc = np.where(np.asarray(project_list_p) == s)
             if len(loc[0]) > 0:
                 project_matrix[i, j] = projects[p][4][loc[0][0]][1]
@@ -119,7 +119,7 @@ def main():
     project_allocation = collections.namedtuple('project_allocation', 'start end presence interval score')
     max_scores = sum([projects[p][1] for p in projects.keys()])
     x = {} # project allocation
-    for i, p in enumerate(projects.keys):
+    for i, p in enumerate(projects.keys()):
         p_duration = projects[p][0]
         p_score = projects[p][1]
         slot_index = model.NewIntVar(0, n_days - p_duration, f'start[{i}]')
@@ -128,7 +128,7 @@ def main():
         interval_var = model.NewOptionalIntervalVar(slot_index, p_duration, end_index, presence_var, f'interval[{i}]')
         x[i] = project_allocation(start=slot_index, end=end_index, presence=presence_var, interval=interval_var, score=p_score)
     y = {} # resources allocation: is resouce j assigned to project i
-    for i, p in enumerate(projects.keys):
+    for i, p in enumerate(projects.keys()):
         for j , c in enumerate(contributors.keys()):
             y[i, j] = model.NewBoolVar(f'contribute_[{i}][{j}]')
 
@@ -144,11 +144,14 @@ def main():
     constraints
     """
     # C1: skills constraint: a project can only start if there are enough qualified resources
-    print(f'best available skills {np.max(skills_matrix, 1)}')
-    for i, p in enumerate(projects.keys):
-        print(' ')
+    print(f'best available skills {np.max(skills_matrix, 0)}')
+    best_skills = np.max(skills_matrix, 0)
+    for i, p in enumerate(projects.keys()):
+        is_doable = np.all(best_skills - project_matrix[i, :] >= 0)
+        print(f'project {i}: {is_doable}')
     """
     Model solve and display
+    """
     """
     variables_list = [x[p] for p in range(len(projects.keys()))]
     solution_printer = VarArraySolutionPrinterWithLimit(variables_list, 1)
@@ -166,5 +169,6 @@ def main():
         print(f'Optimal total value: {solver.ObjectiveValue()}.')
     else:
         print('No solution found.')
+    """
 if __name__ == '__main__':
     main()
