@@ -44,26 +44,51 @@ def main():
     skills_matrix = []
     n_projects = 0
     contributors = collections.defaultdict(list)
+    projects = collections.defaultdict(list)
+    line_index = 0
     for l, line in enumerate(lines):
         line = line.rstrip('\r\n')
+        print(l)
         if(l == 0):
             values = [int(val) for val in line.split(' ')]
             n_contributors = values[0]
             n_projects = values[1]
+            line_index += 1
         else:
-            values = [val for val in line.split(' ')]
-            c = 0
-            while(c < n_contributors):
+            for c in range(n_contributors):
+                c_line = lines[line_index]
+                values = [val for val in c_line.split(' ')]
                 n_skills = int(values[1])
                 contributor_name = values[0]
-                contributors[values[0]] = [contributor_name]
-                s_index = 0
-                while(s_index < n_skills):
-                    contributors[contributor_name].append((values[0], values[1]))
-                    s_index += 1
-                c += 1
+                contributors[contributor_name] = [n_skills]
+                line_index += 1
+                for s in range(n_skills):
+                    s_line = lines[line_index]
+                    values = [val for val in s_line.split(' ')]
+                    contributors[contributor_name].append((values[0], int(values[1])))
+                    line_index += 1
+            for p in range(n_projects):
+                p_line = lines[line_index]
+                values = [val for val in p_line.split(' ')]
+                n_project_roles = int(values[4])
+                p_name = values[0]
+                projects[p_name] = [int(values[1]), int(values[2]), int(values[3]), n_project_roles]
+                line_index += 1
+                project_roles_list = []
+                print(f'project name {values[0]}, content {projects[values[0]]}')
+                for r in range(n_project_roles):
+                    p_roles_line = lines[line_index]
+                    values = [val for val in p_roles_line.split(' ')]
+                    project_roles_list.append((values[0], int(values[1])))
+                    line_index += 1
+                print(f'project_roles_list {project_roles_list}')
+                projects[p_name].append(project_roles_list)
+            break
 
+    print("congtributors")
     print(contributors)
+    print('projects')
+    print(projects)
 
     """
     Model solve and display
