@@ -117,24 +117,37 @@ def main():
     
     model = cp_model.CpModel()
     project_allocation = collections.namedtuple('project_allocation', 'start end presence interval score')
-    x = {}
+    max_scores = sum([projects[p][1] for p in projects.keys()])
+    x = {} # project allocation
     for i, p in enumerate(projects.keys):
         p_duration = projects[p][0]
         p_score = projects[p][1]
-        slot_index = model.NewIntVar(0, n_days - p_duration, f'start[{p}]')
-        end_index = model.NewIntVar(0, n_days, f'end[{p}]')
-        presence_var = model.NewBoolVar(f'presence[{p}]')
-        interval_var = model.NewOptionalIntervalVar(slot_index, p_duration, end_index, presence_var, f'interval[{p}]')
-        x[p] = project_allocation(start=slot_index, end=end_index, presence=presence_var, interval=interval_var, score=p_score)
+        slot_index = model.NewIntVar(0, n_days - p_duration, f'start[{i}]')
+        end_index = model.NewIntVar(0, n_days, f'end[{i}]')
+        presence_var = model.NewBoolVar(f'presence[{i}]')
+        interval_var = model.NewOptionalIntervalVar(slot_index, p_duration, end_index, presence_var, f'interval[{i}]')
+        x[i] = project_allocation(start=slot_index, end=end_index, presence=presence_var, interval=interval_var, score=p_score)
+    y = {} # resources allocation: is resouce j assigned to project i
+    for i, p in enumerate(projects.keys):
+        for j , c in enumerate(contributors.keys()):
+            y[i, j] = model.NewBoolVar(f'contribute_[{i}][{j}]')
 
     """
     cost
+    """
+    total_scores = model.NewIntVar(1, max_scores, 'total_score')
+    model.Add(total_scores == sum([x[p].presence * x[p].score for p in range(len(projects.keys()))]))
+    model.Maximize(total_scores)
+
+
+    """
+    constraints
     """
 
     """
     Model solve and display
     """
-    """    #variables_list = [gc[p] for p in range(n_pools)]
+    variables_list = [x[p] for p in range(len(projects.keys()))]
     solution_printer = VarArraySolutionPrinterWithLimit(variables_list, 1)
     solver = cp_model.CpSolver()
     # solver.parameters.enumerate_all_solutions = True
@@ -150,6 +163,5 @@ def main():
         print(f'Optimal total value: {solver.ObjectiveValue()}.')
     else:
         print('No solution found.')
-    """
 if __name__ == '__main__':
     main()
