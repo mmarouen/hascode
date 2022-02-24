@@ -49,7 +49,6 @@ def main():
     n_days = 100
     for l, line in enumerate(lines):
         line = line.rstrip('\r\n')
-        print(l)
         if(l == 0):
             values = [int(val) for val in line.split(' ')]
             n_contributors = values[0]
@@ -83,8 +82,6 @@ def main():
                     line_index += 1
                 projects[p_name].append(project_roles_list)
             break
-    print(projects)
-    print(contributors)
     unique_skills = []
     for c in contributors.keys():
         if len(contributors[c]) > 1:
@@ -92,7 +89,6 @@ def main():
         unique_skills.append(skills)
     unique_skills = [item for sublist in unique_skills for item in sublist]
     unique_skills = list(set(unique_skills))
-
     skills_matrix = np.zeros((n_contributors, len(unique_skills)))
     for i, c in enumerate(contributors.keys()):
         for j, s in enumerate(unique_skills):
@@ -100,21 +96,25 @@ def main():
             loc = np.where(np.asarray(skill_list_c) == s)
             if len(loc[0]) > 0:
                 skills_matrix[i, j] = contributors[c][loc[0][0] + 1][1]
-    print(skills_matrix)
 
     project_matrix = np.zeros((n_projects, len(unique_skills)))
     for i, p in enumerate(projects.keys()):
-        print(f'project {p}: {projects[p]}')
         for j, s in enumerate(unique_skills):
             project_list_p = [s[0] for s in projects[p][4:][0]]
-            print(f'skill {s}, project skills: {project_list_p}')
             loc = np.where(np.asarray(project_list_p) == s)
             if len(loc[0]) > 0:
-                print(loc[0][0])
-                print(projects[p][4])
                 project_matrix[i, j] = projects[p][4][loc[0][0]][1]
+
+    print(f'skills list: {unique_skills}')
+    print(f'contributors: {contributors.keys()}')
+    print(f'project list {projects.keys()}')
+    print(f'projects: {projects}')
+    print(f'contributors: {contributors}')
+    print('skills matrix')
+    print(skills_matrix)
+    print('project matrix')
     print(project_matrix)
-    
+
     model = cp_model.CpModel()
     project_allocation = collections.namedtuple('project_allocation', 'start end presence interval score')
     max_scores = sum([projects[p][1] for p in projects.keys()])
@@ -143,7 +143,10 @@ def main():
     """
     constraints
     """
-
+    # C1: skills constraint: a project can only start if there are enough qualified resources
+    print(f'best available skills {np.max(skills_matrix, 1)}')
+    for i, p in enumerate(projects.keys):
+        print(' ')
     """
     Model solve and display
     """
