@@ -151,13 +151,24 @@ def main():
     best_skills = np.max(skills_matrix, 0)
     for i, p in enumerate(projects.keys()):
         is_doable = model.NewBoolVar(f'is_doable_{i}')
-        val = int(np.all(best_skills - project_matrix[i, :] >= 0))
-        model.Add(is_doable == val)
+        is_doable_default = int(np.all(best_skills - project_matrix[i, :] >= 0))
+        project_skills = np.where(project_matrix[i, :] > 0)[0]
+        project_skills_level = [project_matrix[i, l] for l in project_skills]
+        juniors = []
+        for s in enumerate(project_skills):
+            for j, c in enumerate(contributors.keys()):
+                skill_id = project_skills[s]
+                junior_id = np.where(skills_matrix[j, :] - project_matrix[i, skill_id] == -1)[0]
+                if(len(junior_id) == 0):
+                    
+
         model.AddImplication(x[i].presence, is_doable)
 
     # C2: if assigned to project p, each contributor can only work on it within project interval
     for j , c in enumerate(contributors.keys()):
         model.AddNoOverlap(y[i, j] for i, _ in enumerate(projects.keys()))
+
+    # C3: update skills matrix if project is finished
 
     
     """
