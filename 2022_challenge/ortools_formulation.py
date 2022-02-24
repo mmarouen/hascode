@@ -127,10 +127,13 @@ def main():
         presence_var = model.NewBoolVar(f'presence[{i}]')
         interval_var = model.NewOptionalIntervalVar(slot_index, p_duration, end_index, presence_var, f'interval[{i}]')
         x[i] = project_allocation(start=slot_index, end=end_index, presence=presence_var, interval=interval_var, score=p_score)
+    
     y = {} # resources allocation: is resouce j assigned to project i
     for i, p in enumerate(projects.keys()):
+        p_duration = projects[p][0]
         for j , c in enumerate(contributors.keys()):
-            y[i, j] = model.NewBoolVar(f'contribute_[{i}][{j}]')
+            presence_var = model.NewBoolVar(f'allocation[{i}, {j}]')
+            y[i, j] = model.NewOptionalIntervalVar(x[i].start, p_duration, x[i].end, presence_var, f'assigned[{i},{j}]')
 
     """
     cost
@@ -147,11 +150,18 @@ def main():
     print(f'best available skills {np.max(skills_matrix, 0)}')
     best_skills = np.max(skills_matrix, 0)
     for i, p in enumerate(projects.keys()):
-        is_doable = np.all(best_skills - project_matrix[i, :] >= 0)
-        print(f'project {i}: {is_doable}')
+        is_doable = model.NewBoolVar(f'is_doable_{i}')
+        val = int(np.all(best_skills - project_matrix[i, :] >= 0))
+        model.Add(is_doable == val)
+        model.AddImplication(x[i].presence, is_doable)
+
+    # C2: if assigned to project p, each contributor can only work on it within project interval
+    for j , c in enumerate(contributors.keys()):
+        model.AddNoOverlap(y[i, j] for i, _ in enumerate(projects.keys()))
+
+    
     """
     Model solve and display
-    """
     """
     variables_list = [x[p] for p in range(len(projects.keys()))]
     solution_printer = VarArraySolutionPrinterWithLimit(variables_list, 1)
@@ -162,13 +172,13 @@ def main():
     solver.parameters.search_branching = cp_model.FIXED_SEARCH
 
     now = time()
-    status = solver.Solve(model, solution_printer)
+    #status = solver.Solve(model, solution_printer)
+    status = solver.Solve(model)
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
         print(f'total runtime {int(time() - now)}s')
         print("Solutions found!")
         print(f'Optimal total value: {solver.ObjectiveValue()}.')
     else:
         print('No solution found.')
-    """
 if __name__ == '__main__':
     main()
