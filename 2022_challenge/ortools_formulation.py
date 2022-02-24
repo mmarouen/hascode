@@ -140,8 +140,20 @@ def main():
     cost
     """
     total_scores = model.NewIntVar(1, max_scores, 'total_score')
-    for 
-    model.Add(total_scores == sum([x[p].presence * x[p].score for p in range(len(projects.keys()))]))
+    project_scores = []
+    results = []
+    for i, p in enumerate(projects.keys()):
+        best_before = projects[p][2]
+        p_score = projects[p][1]
+        project_scores.append(model.NewIntVar(1, projects[p][1], 'project_score[{i}]'))
+        tmp_ = model.NewIntVar(-n_days, n_days, ' ')
+        model.Add(tmp_ == x[i].end - best_before)
+        tmp = model.NewIntVar(1, projects[p][1], ' ')
+        model.AddMaxEquality(tmp, [tmp_, model.NewConstant(0)])
+        model.Add(project_scores[i] == p_score - tmp)
+        results.append(model.NewIntVar(0, projects[p][1], 'results[{i}]'))
+        model.AddProdEquality(results[i], [x[i].presence, project_scores[i]])
+    model.Add(total_scores == sum([results[p] for p in range(len(projects.keys()))]))
     model.Maximize(total_scores)
 
 
