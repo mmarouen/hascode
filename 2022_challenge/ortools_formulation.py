@@ -75,21 +75,30 @@ def main():
                 projects[p_name] = [int(values[1]), int(values[2]), int(values[3]), n_project_roles]
                 line_index += 1
                 project_roles_list = []
-                print(f'project name {values[0]}, content {projects[values[0]]}')
                 for r in range(n_project_roles):
                     p_roles_line = lines[line_index]
                     values = [val for val in p_roles_line.split(' ')]
                     project_roles_list.append((values[0], int(values[1])))
                     line_index += 1
-                print(f'project_roles_list {project_roles_list}')
                 projects[p_name].append(project_roles_list)
             break
-
-    print("congtributors")
-    print(contributors)
-    print('projects')
     print(projects)
-
+    print(contributors)
+    unique_skills = []
+    for c in contributors.keys():
+        if len(contributors[c]) > 1:
+            skills = [s[0] for s in contributors[c][1:]]
+        unique_skills.append(skills)
+    unique_skills = [item for sublist in unique_skills for item in sublist]
+    unique_skills = list(set(unique_skills))
+    skills_matrix = np.zeros((n_contributors, len(unique_skills)))
+    for i, c in enumerate(contributors.keys()):
+        for j, s in enumerate(unique_skills):
+            skill_list_c = [s[0] for s in contributors[c][1:]]
+            loc = np.where(np.asarray(skill_list_c) == s)
+            if len(loc[0]) > 0:
+                skills_matrix[i, j] = contributors[c][loc[0][0] + 1][1]
+    print(skills_matrix)
     """
     Model solve and display
     """
